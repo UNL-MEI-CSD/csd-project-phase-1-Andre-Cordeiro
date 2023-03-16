@@ -1,9 +1,9 @@
-/Users/jleitao/Documents/My Courses/CSD 2023/workspace/CSD-Lab1/src/consensus/messages/PrePrepareMessage.java
-/Users/jleitao/Documents/My Courses/CSD 2023/workspace/CSD-Lab1/src/utils/SignaturesHelper.java
-/Users/jleitao/Documents/My Courses/CSD 2023/workspace/CSD-Lab1/src/consensus/messages/CommitMessage.java
-/Users/jleitao/Documents/My Courses/CSD 2023/workspace/CSD-Lab1/src/app/RandomGenerationOperationApp.java
-/Users/jleitao/Documents/My Courses/CSD 2023/workspace/CSD-Lab1/src/consensus/notifications/CommittedNotification.java
-/Users/jleitao/Documents/My Courses/CSD 2023/workspace/CSD-Lab1/src/consensus/requests/ProposeRequest.java
-/Users/jleitao/Documents/My Courses/CSD 2023/workspace/CSD-Lab1/src/consensus/PBFTProtocol.java
-/Users/jleitao/Documents/My Courses/CSD 2023/workspace/CSD-Lab1/src/consensus/messages/PrepareMessage.java
-/Users/jleitao/Documents/My Courses/CSD 2023/workspace/CSD-Lab1/src/utils/Crypto.java
+/Users/alxdavids-work/teaching/2022-23/CSD/testing/csd-project-phase1/src/main/java/consensus/messages/PrepareMessage.java
+/Users/alxdavids-work/teaching/2022-23/CSD/testing/csd-project-phase1/src/main/java/consensus/PBFTProtocol.java
+/Users/alxdavids-work/teaching/2022-23/CSD/testing/csd-project-phase1/src/main/java/consensus/requests/ProposeRequest.java
+/Users/alxdavids-work/teaching/2022-23/CSD/testing/csd-project-phase1/src/main/java/consensus/notifications/CommittedNotification.java
+/Users/alxdavids-work/teaching/2022-23/CSD/testing/csd-project-phase1/src/main/java/utils/SignaturesHelper.java
+/Users/alxdavids-work/teaching/2022-23/CSD/testing/csd-project-phase1/src/main/java/app/RandomGenerationOperationApp.java
+/Users/alxdavids-work/teaching/2022-23/CSD/testing/csd-project-phase1/src/main/java/consensus/messages/PrePrepareMessage.java
+/Users/alxdavids-work/teaching/2022-23/CSD/testing/csd-project-phase1/src/main/java/consensus/messages/CommitMessage.java
+/Users/alxdavids-work/teaching/2022-23/CSD/testing/csd-project-phase1/src/main/java/utils/Crypto.java
