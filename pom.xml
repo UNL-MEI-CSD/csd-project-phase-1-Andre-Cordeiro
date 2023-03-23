@@ -35,6 +35,7 @@
     </dependencies>
 
     <build>
+		<sourceDirectory>src</sourceDirectory>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -53,7 +54,7 @@
                 <configuration>
                     <transformers>
                         <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                            <mainClass>main.java.app.RandomGenerationOperationApp</mainClass>
+                            <mainClass>app.RandomGenerationOperationApp</mainClass>
                             <manifestEntries>
                                 <Multi-Release>true</Multi-Release>
                             </manifestEntries>

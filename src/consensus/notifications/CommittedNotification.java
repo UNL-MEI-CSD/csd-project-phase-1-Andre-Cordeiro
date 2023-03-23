@@ -1,4 +1,4 @@
-package main.java.consensus.notifications;
+package consensus.notifications;
 
 import pt.unl.fct.di.novasys.babel.generic.ProtoNotification;
 

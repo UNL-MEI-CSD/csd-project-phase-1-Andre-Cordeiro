@@ -1,4 +1,4 @@
-package main.java.consensus;
+package consensus;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -16,8 +16,8 @@ import java.util.Properties;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import main.java.consensus.requests.ProposeRequest;
-import main.java.utils.Crypto;
+import consensus.notifications.ViewChange;
+import consensus.requests.ProposeRequest;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
 import pt.unl.fct.di.novasys.babel.generic.ProtoMessage;
@@ -29,6 +29,7 @@ import pt.unl.fct.di.novasys.channel.tcp.events.OutConnectionDown;
 import pt.unl.fct.di.novasys.channel.tcp.events.OutConnectionFailed;
 import pt.unl.fct.di.novasys.channel.tcp.events.OutConnectionUp;
 import pt.unl.fct.di.novasys.network.data.Host;
+import utils.Crypto;
 
 
 public class PBFTProtocol extends GenericProtocol {
@@ -48,6 +49,7 @@ public class PBFTProtocol extends GenericProtocol {
 	
 	//TODO: add protocol state (related with the internal operation of the view)
 	private Host self;
+	private int viewNumber;
 	private final List<Host> view;
 	private int seq;
 	
@@ -59,6 +61,7 @@ public class PBFTProtocol extends GenericProtocol {
 		self = new Host(InetAddress.getByName(props.getProperty(ADDRESS_KEY)),
 				Integer.parseInt(props.getProperty(PORT_KEY)));
 		
+		viewNumber = 1;
 		view = new LinkedList<>();
 		String[] membership = props.getProperty(INITIAL_MEMBERSHIP_KEY).split(",");
 		for (String s : membership) {
@@ -91,13 +94,16 @@ public class PBFTProtocol extends GenericProtocol {
         registerChannelEventHandler(peerChannel, OutConnectionDown.EVENT_ID, this::uponOutConnectionDown);
         registerChannelEventHandler(peerChannel, OutConnectionUp.EVENT_ID, this::uponOutConnectionUp);
         registerChannelEventHandler(peerChannel, OutConnectionFailed.EVENT_ID, this::uponOutConnectionFailed);
-
+        
 		logger.info("Standing by to extablish connections (10s)");
 		
 		try { Thread.sleep(10 * 1000); } catch (InterruptedException e) { }
 		
 		// TODO: Open connections to all nodes in the (initial) view 
 		
+		
+		//Installing first view
+		triggerNotification(new ViewChange(view, viewNumber));
 	}
 	
 	//TODO: Add event (messages, requests, timers, notifications) handlers of the protocol
@@ -124,12 +130,5 @@ public class PBFTProtocol extends GenericProtocol {
     private void uponInConnectionDown(InConnectionDown event, int channel) {
         logger.warn(event);
     }
-	
-	/* ----------------------------------------------- ------------- ------------------------------------------ */
-    /* ----------------------------------------------- APP INTERFACE ------------------------------------------ */
-    /* ----------------------------------------------- ------------- ------------------------------------------ */
-    public void submitOperation(byte[] b, byte[] sig) {
-    	sendRequest(new ProposeRequest(b, sig), PBFTProtocol.PROTO_ID);
-    }
-	
+		
 }

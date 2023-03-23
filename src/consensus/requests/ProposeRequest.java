@@ -1,4 +1,4 @@
-package main.java.consensus.requests;
+package consensus.requests;
 
 import pt.unl.fct.di.novasys.babel.generic.ProtoRequest;
 
