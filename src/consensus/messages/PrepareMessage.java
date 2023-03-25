@@ -8,7 +8,7 @@ import pt.unl.fct.di.novasys.babel.generic.signed.SignedProtoMessage;
 
 public class PrepareMessage extends SignedProtoMessage {
 
-	private final static short MESSAGE_ID = 102;	
+	public final static short MESSAGE_ID = 102;	
 	
 	//TODO: Define here the elements of the message
 	
