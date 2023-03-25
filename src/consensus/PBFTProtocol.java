@@ -16,6 +16,9 @@ import java.util.Properties;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import consensus.messages.CommitMessage;
+import consensus.messages.PrePrepareMessage;
+import consensus.messages.PrepareMessage;
 import consensus.notifications.ViewChange;
 import consensus.requests.ProposeRequest;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
@@ -94,12 +97,24 @@ public class PBFTProtocol extends GenericProtocol {
         registerChannelEventHandler(peerChannel, OutConnectionDown.EVENT_ID, this::uponOutConnectionDown);
         registerChannelEventHandler(peerChannel, OutConnectionUp.EVENT_ID, this::uponOutConnectionUp);
         registerChannelEventHandler(peerChannel, OutConnectionFailed.EVENT_ID, this::uponOutConnectionFailed);
-        
+
+
+		// Message Handlers
+		registerMessageHandler(peerChannel, PrePrepareMessage.MESSAGE_ID, this::uponPrePrepareMessage, this::uponMessageFailed);
+        registerMessageHandler(peerChannel, PrepareMessage.MESSAGE_ID, this::uponPrepareMessage, this::uponMessageFailed);
+		registerMessageHandler(peerChannel, CommitMessage.MESSAGE_ID, this::uponCommitMessage, this::uponMessageFailed);
+
+		// Message Serializers
+		registerMessageSerializer(peerChannel, PrePrepareMessage.MESSAGE_ID, PrePrepareMessage.serializer);
+		registerMessageSerializer(peerChannel, PrepareMessage.MESSAGE_ID, PrepareMessage.serializer);
+		registerMessageSerializer(peerChannel, CommitMessage.MESSAGE_ID, CommitMessage.serializer);
+
+
 		logger.info("Standing by to extablish connections (10s)");
 		
 		try { Thread.sleep(10 * 1000); } catch (InterruptedException e) { }
 		
-		// TODO: Open connections to all nodes in the (initial) view 
+		// TODO: Open connections to all nodes in the (initial) view
 		
 		
 		//Installing first view
@@ -130,5 +145,21 @@ public class PBFTProtocol extends GenericProtocol {
     private void uponInConnectionDown(InConnectionDown event, int channel) {
         logger.warn(event);
     }
+
+	private void uponPrePrepareMessage(PrePrepareMessage msg, Host from, short sourceProto, int channel){
+		//todo
+	}
+
+	private void uponPrepareMessage(PrepareMessage msg, Host from, short sourceProto, int channel){
+		//todo
+	}
+
+	private void uponCommitMessage(CommitMessage msg, Host from, short sourceProto, int channel){
+		//TODO
+	}
+
+	private void uponMessageFailed(ProtoMessage msg, Host from, short sourceProto, int channel){
+		//TODO
+	}
 		
 }
