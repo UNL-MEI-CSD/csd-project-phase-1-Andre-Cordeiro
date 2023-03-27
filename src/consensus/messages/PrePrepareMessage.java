@@ -1,9 +1,6 @@
 package consensus.messages;
 
 import java.io.IOException;
-
-import javax.swing.text.View;
-
 import io.netty.buffer.ByteBuf;
 import pt.unl.fct.di.novasys.babel.generic.signed.SignedMessageSerializer;
 import pt.unl.fct.di.novasys.babel.generic.signed.SignedProtoMessage;
