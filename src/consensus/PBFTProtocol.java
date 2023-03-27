@@ -98,6 +98,8 @@ public class PBFTProtocol extends GenericProtocol {
         registerChannelEventHandler(peerChannel, OutConnectionUp.EVENT_ID, this::uponOutConnectionUp);
         registerChannelEventHandler(peerChannel, OutConnectionFailed.EVENT_ID, this::uponOutConnectionFailed);
 
+		// Request Handlers
+		//TODO
 
 		// Message Handlers
 		registerMessageHandler(peerChannel, PrePrepareMessage.MESSAGE_ID, this::uponPrePrepareMessage, this::uponMessageFailed);
@@ -115,7 +117,7 @@ public class PBFTProtocol extends GenericProtocol {
 		try { Thread.sleep(10 * 1000); } catch (InterruptedException e) { }
 		
 		// TODO: Open connections to all nodes in the (initial) view
-		
+		view.forEach(this::openConnection);
 		
 		//Installing first view
 		triggerNotification(new ViewChange(view, viewNumber));
