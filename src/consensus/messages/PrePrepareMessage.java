@@ -9,13 +9,15 @@ public class PrePrepareMessage extends SignedProtoMessage {
 
 	public final static short MESSAGE_ID = 101;
 
-	public final int vN, sN, hashOpVal;
+	public final int vN; // View Number
+	public final int sN; // Sequence Number
+	public final int digest; //Message Digest
 	
-	public PrePrepareMessage(int vN, int sN, int hashOpVal) {  //TODO SHOULD THE HASH VALUE BE AN INT?
+	public PrePrepareMessage(int vN, int sN, int digest) {  //TODO SHOULD THE HASH VALUE BE AN INT?
 		super(PrePrepareMessage.MESSAGE_ID);
 		this.vN = vN;
 		this.sN = sN;
-		this.hashOpVal = hashOpVal;
+		this.digest = digest;
 	}
 
 	public static SignedMessageSerializer<PrePrepareMessage> serializer = new SignedMessageSerializer<PrePrepareMessage>() {
@@ -24,15 +26,15 @@ public class PrePrepareMessage extends SignedProtoMessage {
 		public void serializeBody(PrePrepareMessage signedProtoMessage, ByteBuf out) throws IOException {
 			out.writeInt(signedProtoMessage.vN);
 			out.writeInt(signedProtoMessage.sN);
-			out.writeInt(signedProtoMessage.hashOpVal); 
+			out.writeInt(signedProtoMessage.digest); 
 		}
 
 		@Override
 		public PrePrepareMessage deserializeBody(ByteBuf in) throws IOException {
 			int vN = in.readInt();
 			int sN = in.readInt();
-			int hashOpVal = in.readInt();
-			return new PrePrepareMessage(vN, sN, hashOpVal);
+			int digest = in.readInt();
+			return new PrePrepareMessage(vN, sN, digest);
 		}
 		
 	};
