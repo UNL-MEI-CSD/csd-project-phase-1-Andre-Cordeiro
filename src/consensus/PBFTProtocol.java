@@ -33,6 +33,8 @@ import pt.unl.fct.di.novasys.channel.tcp.events.OutConnectionFailed;
 import pt.unl.fct.di.novasys.channel.tcp.events.OutConnectionUp;
 import pt.unl.fct.di.novasys.network.data.Host;
 import utils.Crypto;
+import utils.SeqN;
+import utils.SignaturesHelper;
 
 
 public class PBFTProtocol extends GenericProtocol {
@@ -49,6 +51,10 @@ public class PBFTProtocol extends GenericProtocol {
 	private String cryptoName;
 	private KeyStore truststore;
 	private PrivateKey key;
+
+	//Leadership
+	private SeqN currentSeqN;
+	private boolean iAmCurrentLeader;
 	
 	//TODO: add protocol state (related with the internal operation of the view)
 	private Host self;
@@ -65,12 +71,18 @@ public class PBFTProtocol extends GenericProtocol {
 				Integer.parseInt(props.getProperty(PORT_KEY)));
 		
 		viewNumber = 1;
+
+		
+		
 		view = new LinkedList<>();
 		String[] membership = props.getProperty(INITIAL_MEMBERSHIP_KEY).split(",");
 		for (String s : membership) {
 			String[] tokens = s.split(":");
 			view.add(new Host(InetAddress.getByName(tokens[0]), Integer.parseInt(tokens[1])));
 		}
+		currentSeqN = new SeqN(0, view.get(0));
+		iAmCurrentLeader = self.equals(view.get(0));
+		
 	}
 
 	@Override
@@ -130,7 +142,22 @@ public class PBFTProtocol extends GenericProtocol {
 	
     private void uponProposeRequest(ProposeRequest req, int channel) {
 		logger.info("Received propose request: " + req);
-		//TODO
+		//check if the node is the leader
+		if (currentSeqN.getNode().equals(self)){
+			//TODO: check if the request is valid
+			
+			PrePrepareMessage prePrepareMsg = new PrePrepareMessage(viewNumber, currentSeqN);
+			view.forEach(node -> {
+				if (!node.equals(self)){
+					sendMessage(prePrepareMsg, node);
+				}
+			});
+		}
+		else {
+			logger.warn("Request received :" + req + "without being leader"); 
+		}
+
+
 	}
 	
 	private void uponOutConnectionUp(OutConnectionUp event, int channel) {
@@ -156,6 +183,7 @@ public class PBFTProtocol extends GenericProtocol {
 
 	private void uponPrePrepareMessage(PrePrepareMessage msg, Host from, short sourceProto, int channel){
 		//todo
+		logger.info("Received pre-prepare message: " + msg);
 	}
 
 	private void uponPrepareMessage(PrepareMessage msg, Host from, short sourceProto, int channel){

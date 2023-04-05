@@ -1,5 +1,8 @@
 package consensus.requests;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
 import pt.unl.fct.di.novasys.babel.generic.ProtoRequest;
 
 public class ProposeRequest extends ProtoRequest {
@@ -22,6 +25,7 @@ public class ProposeRequest extends ProtoRequest {
 	public byte[] getSignature() {
 		return signature;
 	}
+	
 	
 	
 
