@@ -46,4 +46,20 @@ public class PrePrepareMessage extends SignedProtoMessage {
 		return PrePrepareMessage.serializer;
 	}
 
+	@Override
+	public String toString() {
+		return "PrePrepareMessage{" +
+				"vN=" + vN +
+				", sN=" + sN +
+				'}';
+	}
+
+	public int getViewNumber(){
+		return vN;
+	}
+
+	public SeqN getSeqNumber(){
+		return sN;
+	}
+
 }
