@@ -33,6 +33,7 @@ import pt.unl.fct.di.novasys.channel.tcp.events.OutConnectionFailed;
 import pt.unl.fct.di.novasys.channel.tcp.events.OutConnectionUp;
 import pt.unl.fct.di.novasys.network.data.Host;
 import utils.Crypto;
+import utils.OpsBatch;
 import utils.SeqN;
 import utils.SignaturesHelper;
 
@@ -60,7 +61,11 @@ public class PBFTProtocol extends GenericProtocol {
 	private Host self;
 	private int viewNumber;
 	private final List<Host> view;
-	private int seq;
+	private final int seq;
+	
+	private OpsBatch batch;
+	private int prepareMessagesReceived;
+	private int f;
 	
 	public PBFTProtocol(Properties props) throws NumberFormatException, UnknownHostException {
 		super(PBFTProtocol.PROTO_NAME, PBFTProtocol.PROTO_ID);
@@ -71,7 +76,7 @@ public class PBFTProtocol extends GenericProtocol {
 				Integer.parseInt(props.getProperty(PORT_KEY)));
 		
 		viewNumber = 1;
-
+		prepareMessagesReceived = 0;
 		
 		
 		view = new LinkedList<>();
@@ -80,6 +85,7 @@ public class PBFTProtocol extends GenericProtocol {
 			String[] tokens = s.split(":");
 			view.add(new Host(InetAddress.getByName(tokens[0]), Integer.parseInt(tokens[1])));
 		}
+		f = (view.size() - 1) / 3;
 		currentSeqN = new SeqN(0, view.get(0));
 		iAmCurrentLeader = self.equals(view.get(0));
 		
@@ -144,9 +150,11 @@ public class PBFTProtocol extends GenericProtocol {
 		logger.info("Received propose request: " + req);
 		//check if the node is the leader
 		if (currentSeqN.getNode().equals(self)){
-			//TODO: check if the request is valid
+			//TODO: check if the request is valid (not a duplicate, etc)
+			//TODO: add the request to the batch
 			
 			PrePrepareMessage prePrepareMsg = new PrePrepareMessage(viewNumber, currentSeqN);
+
 			view.forEach(node -> {
 				if (!node.equals(self)){
 					sendMessage(prePrepareMsg, node);
@@ -182,12 +190,42 @@ public class PBFTProtocol extends GenericProtocol {
     }
 
 	private void uponPrePrepareMessage(PrePrepareMessage msg, Host from, short sourceProto, int channel){
-		//todo
 		logger.info("Received pre-prepare message: " + msg);
+		if (msg.getViewNumber() == viewNumber){
+			//TODO: check if the message is valid (not a duplicate, etc)
+			//TODO: add the message to the batch
+			//send a prepare message to all nodes in the view
+
+			PrepareMessage prepareMsg = new PrepareMessage(viewNumber, currentSeqN, 0, 0);
+
+			view.forEach(node -> {
+				if (!node.equals(self)){
+					sendMessage(prepareMsg, node);
+				}
+			});
+
+		} else {
+			logger.warn("Received pre-prepare message with wrong view number: " + msg);
+		}
 	}
 
 	private void uponPrepareMessage(PrepareMessage msg, Host from, short sourceProto, int channel){
-		//todo
+		// wait for 2f+1 prepare messages with the same view number and sequence number
+
+		if (msg.getViewNumber() == viewNumber){
+
+			if (msg.getSequenceNumber().equals(currentSeqN)){
+				
+				//TODO: check if the message is valid (not a duplicate and well signed)
+				prepareMessagesReceived++;
+				if (prepareMessagesReceived == 2 * f + 1){
+					//TODO: send a commit message to all nodes in the view
+					logger.info("Sending commit message");
+				}
+			}
+		} else {
+			logger.warn("Received prepare message with wrong view number: " + msg);
+		}
 	}
 
 	private void uponCommitMessage(CommitMessage msg, Host from, short sourceProto, int channel){
