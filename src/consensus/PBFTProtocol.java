@@ -99,7 +99,8 @@ public class PBFTProtocol extends GenericProtocol {
         registerChannelEventHandler(peerChannel, OutConnectionFailed.EVENT_ID, this::uponOutConnectionFailed);
 
 		// Request Handlers
-		//TODO
+		registerRequestHandler( ProposeRequest.REQUEST_ID, this::uponProposeRequest);
+
 
 		// Message Handlers
 		registerMessageHandler(peerChannel, PrePrepareMessage.MESSAGE_ID, this::uponPrePrepareMessage, this::uponMessageFailed);
@@ -127,7 +128,12 @@ public class PBFTProtocol extends GenericProtocol {
 	
 	/* --------------------------------------- Connection Manager Functions ----------------------------------- */
 	
-    private void uponOutConnectionUp(OutConnectionUp event, int channel) {
+    private void uponProposeRequest(ProposeRequest req, int channel) {
+		logger.info("Received propose request: " + req);
+		//TODO
+	}
+	
+	private void uponOutConnectionUp(OutConnectionUp event, int channel) {
         logger.info(event);
     }
 
