@@ -153,7 +153,7 @@ public class PBFTProtocol extends GenericProtocol {
 			//TODO: check if the request is valid (not a duplicate, etc)
 			//TODO: add the request to the batch
 			
-			PrePrepareMessage prePrepareMsg = new PrePrepareMessage(viewNumber, currentSeqN);
+			PrePrepareMessage prePrepareMsg = new PrePrepareMessage(viewNumber, currentSeqN,0);
 
 			view.forEach(node -> {
 				if (!node.equals(self)){
