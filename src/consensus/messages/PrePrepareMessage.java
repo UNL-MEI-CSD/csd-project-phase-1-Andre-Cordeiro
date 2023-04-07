@@ -12,14 +12,13 @@ public class PrePrepareMessage extends SignedProtoMessage {
 
 	public final int vN; // View Number
 	public final SeqN sN; // Sequence Number
-	//TODO Add a digest of the block
-
+	public final int digest; // Digest of the block
 	
-	public PrePrepareMessage(int vN, SeqN sN) {  
+	public PrePrepareMessage(int vN, SeqN sN, int digest) {  
 		super(PrePrepareMessage.MESSAGE_ID);
 		this.vN = vN;
 		this.sN = sN;
-
+		this.digest = digest;
 	}
 
 	public static SignedMessageSerializer<PrePrepareMessage> serializer = new SignedMessageSerializer<PrePrepareMessage>() {
@@ -28,15 +27,16 @@ public class PrePrepareMessage extends SignedProtoMessage {
 		public void serializeBody(PrePrepareMessage signedProtoMessage, ByteBuf out) throws IOException {
 			out.writeInt(signedProtoMessage.vN);
 			signedProtoMessage.sN.serialize(out);
-
+			out.writeInt(signedProtoMessage.digest);
 		}
 
 		@Override
 		public PrePrepareMessage deserializeBody(ByteBuf in) throws IOException {
 			int vN = in.readInt();
 			SeqN sN = SeqN.deserialize(in);
+			int digest = in.readInt();
 
-			return new PrePrepareMessage(vN, sN);
+			return new PrePrepareMessage(vN, sN, digest);
 		}
 		
 	};
@@ -60,6 +60,10 @@ public class PrePrepareMessage extends SignedProtoMessage {
 
 	public SeqN getSeqNumber(){
 		return sN;
+	}
+
+	public int getDigest(){
+		return digest;
 	}
 
 }
