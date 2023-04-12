@@ -1,6 +1,8 @@
 package consensus.messages;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+
 import io.netty.buffer.ByteBuf;
 import pt.unl.fct.di.novasys.babel.generic.signed.SignedMessageSerializer;
 import pt.unl.fct.di.novasys.babel.generic.signed.SignedProtoMessage;
@@ -12,13 +14,13 @@ public class PrePrepareMessage extends SignedProtoMessage {
 
 	public final int vN; // View Number
 	public final SeqN sN; // Sequence Number
-	public final int digest; // Digest of the block
+	public final String op; // Operation
 	
-	public PrePrepareMessage(int vN, SeqN sN, int digest) {  
+	public PrePrepareMessage(int vN, SeqN sN, String operation) {  
 		super(PrePrepareMessage.MESSAGE_ID);
 		this.vN = vN;
 		this.sN = sN;
-		this.digest = digest;
+		this.op = operation;
 	}
 
 	public static SignedMessageSerializer<PrePrepareMessage> serializer = new SignedMessageSerializer<PrePrepareMessage>() {
@@ -27,16 +29,16 @@ public class PrePrepareMessage extends SignedProtoMessage {
 		public void serializeBody(PrePrepareMessage signedProtoMessage, ByteBuf out) throws IOException {
 			out.writeInt(signedProtoMessage.vN);
 			signedProtoMessage.sN.serialize(out);
-			out.writeInt(signedProtoMessage.digest);
+			out.writeCharSequence(signedProtoMessage.op, StandardCharsets.UTF_8);
 		}
 
 		@Override
 		public PrePrepareMessage deserializeBody(ByteBuf in) throws IOException {
 			int vN = in.readInt();
 			SeqN sN = SeqN.deserialize(in);
-			int digest = in.readInt();
+			String op = in.readCharSequence(in.readableBytes(), StandardCharsets.UTF_8).toString();
 
-			return new PrePrepareMessage(vN, sN, digest);
+			return new PrePrepareMessage(vN, sN, op);
 		}
 		
 	};
@@ -62,8 +64,8 @@ public class PrePrepareMessage extends SignedProtoMessage {
 		return sN;
 	}
 
-	public int getDigest(){
-		return digest;
+	public String getOp(){
+		return op;
 	}
 
 }
