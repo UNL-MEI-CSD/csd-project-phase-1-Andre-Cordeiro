@@ -153,7 +153,8 @@ public class PBFTProtocol extends GenericProtocol {
 			//TODO: check if the request is valid (not a duplicate, etc)
 			//TODO: add the request to the batch
 			
-			PrePrepareMessage prePrepareMsg = new PrePrepareMessage(viewNumber, currentSeqN,0);
+			//TODO: ! What do we parse as the operation? 
+			PrePrepareMessage prePrepareMsg = new PrePrepareMessage(viewNumber, currentSeqN, "default operation");
 
 			view.forEach(node -> {
 				if (!node.equals(self)){
@@ -194,9 +195,9 @@ public class PBFTProtocol extends GenericProtocol {
 		if (msg.getViewNumber() == viewNumber){
 			//TODO: check if the message is valid (not a duplicate, etc)
 			//TODO: add the message to the batch
+			
 			//send a prepare message to all nodes in the view
-
-			PrepareMessage prepareMsg = new PrepareMessage(viewNumber, currentSeqN, 0, 0);
+			PrepareMessage prepareMsg = new PrepareMessage(viewNumber, currentSeqN, msg.getOp().hashCode(), 0);
 
 			view.forEach(node -> {
 				if (!node.equals(self)){
