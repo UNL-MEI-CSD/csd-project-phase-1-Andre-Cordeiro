@@ -9,8 +9,10 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import org.apache.logging.log4j.LogManager;
@@ -36,6 +38,7 @@ import utils.Crypto;
 import utils.OpsBatch;
 import utils.SeqN;
 import utils.SignaturesHelper;
+import utils.MessageIdentifier;
 
 
 public class PBFTProtocol extends GenericProtocol {
@@ -66,6 +69,9 @@ public class PBFTProtocol extends GenericProtocol {
 	private OpsBatch batch;
 	private int prepareMessagesReceived;
 	private int f;
+
+	// ? MAP TO KEEP LOG OF MESSAGES RECEIVED AND SENT FROM THIS REPLICA
+	private Map<MessageIdentifier, Object> log;
 	
 	public PBFTProtocol(Properties props) throws NumberFormatException, UnknownHostException {
 		super(PBFTProtocol.PROTO_NAME, PBFTProtocol.PROTO_ID);
@@ -77,6 +83,8 @@ public class PBFTProtocol extends GenericProtocol {
 		
 		viewNumber = 1;
 		prepareMessagesReceived = 0;
+
+		log = new HashMap<>();
 		
 		
 		view = new LinkedList<>();
@@ -194,16 +202,20 @@ public class PBFTProtocol extends GenericProtocol {
 		logger.info("Received pre-prepare message: " + msg);
 		if (msg.getViewNumber() == viewNumber){
 			//TODO: check if the message is valid (not a duplicate, etc)
-			//TODO: add the message to the batch
-			
-			//send a prepare message to all nodes in the view
-			PrepareMessage prepareMsg = new PrepareMessage(viewNumber, currentSeqN, msg.getOp().hashCode(), 0);
+			if(checkValidMessage(msg)){
 
-			view.forEach(node -> {
-				if (!node.equals(self)){
-					sendMessage(prepareMsg, node);
-				}
-			});
+				//TODO: add the message to the batch
+
+				//send a prepare message to all nodes in the view
+				PrepareMessage prepareMsg = new PrepareMessage(viewNumber, currentSeqN, msg.getOp().hashCode(), 0);
+
+				view.forEach(node -> {
+					if (!node.equals(self)){
+						sendMessage(prepareMsg, node);
+					}
+				});
+
+			}
 
 		} else {
 			logger.warn("Received pre-prepare message with wrong view number: " + msg);
@@ -235,6 +247,26 @@ public class PBFTProtocol extends GenericProtocol {
 
 	private void uponMessageFailed(ProtoMessage msg, Host from, short sourceProto, int channel){
 		//TODO
+	}
+
+
+	private boolean checkValidMessage(Object msgObj){
+		if(msgObj instanceof PrePrepareMessage){
+			PrePrepareMessage msg = (PrePrepareMessage) msgObj;
+			
+			MessageIdentifier msgId = new MessageIdentifier(msg.getViewNumber(), msg.getSeqNumber().getCounter());
+
+			for(MessageIdentifier id : log.keySet()){
+				if(id.equals(msgId)){
+					PrePrepareMessage msgInLog = (PrePrepareMessage) log.get(id);
+					return msg.getOp().hashCode() == msgInLog.getOp().hashCode();
+				}
+			}
+		}
+		else
+			throw new IllegalArgumentException("Message is not valid");
+
+		return false;
 	}
 		
 }
