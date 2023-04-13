@@ -36,12 +36,20 @@ clean:
 
 
 kill:
-#get all terminal running java, kill the process and close the terminal
 	@echo "${BOLD}${SYELLOW}🔪  Killing all java processes ${S}"
 	@for pid in $(shell ps -ef | grep java | grep -v grep | awk '{print $$2}'); do \
 		kill -9 $$pid; \
 	done
 	@echo "${BOLD}${SYELLOW}All java processes/terminal killed 👍 ${S}"
+
+stop:
+#same but with a emoji stop sign instead 
+	@echo "${BOLD}${SORANGE}🛑  Stopping all java processes ${S}"
+	@for pid in $(shell ps -ef | grep java | grep -v grep | awk '{print $$2}'); do \
+		kill -2 $$pid; \
+	done
+	@echo "${BOLD}${SORANGE}All java processes stop 👍 ${S}"
+	
 
 
 
@@ -62,3 +70,4 @@ SYELLOW	=		\033[93m
 SBLUE	=		\033[94m
 SPURPLE	=		\033[95m
 SCYAN	=		\033[96m
+SORANGE = 		\033[33m
