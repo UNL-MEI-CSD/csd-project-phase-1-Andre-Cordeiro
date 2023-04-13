@@ -45,4 +45,22 @@ public class CommitMessage extends SignedProtoMessage{
 	public SignedMessageSerializer<? extends SignedProtoMessage> getSerializer() {
 		return CommitMessage.serializer;
 	}
+
+	public int getvN() {
+		return vN;
+	}
+
+	public int getsN() {
+		return sN;
+	}
+
+	public int getHashOpVal() {
+		return hashOpVal;
+	}
+
+	public int getiN() {
+		return iN;
+	}
+
+	
 }

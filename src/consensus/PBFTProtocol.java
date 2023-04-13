@@ -7,6 +7,7 @@ import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
+import java.security.Timestamp;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.util.HashMap;
@@ -35,9 +36,9 @@ import pt.unl.fct.di.novasys.channel.tcp.events.OutConnectionFailed;
 import pt.unl.fct.di.novasys.channel.tcp.events.OutConnectionUp;
 import pt.unl.fct.di.novasys.network.data.Host;
 import utils.Crypto;
-import utils.OpsBatch;
 import utils.SeqN;
 import utils.SignaturesHelper;
+import utils.Operation.OpsMap;
 import utils.MessageIdentifier;
 
 
@@ -66,12 +67,10 @@ public class PBFTProtocol extends GenericProtocol {
 	private final List<Host> view;
 	private final int seq;
 	
-	private OpsBatch batch;
+	private OpsMap opsMap;
 	private int prepareMessagesReceived;
 	private int f;
 
-	// ? MAP TO KEEP LOG OF MESSAGES RECEIVED AND SENT FROM THIS REPLICA
-	private Map<MessageIdentifier, Object> log;
 	
 	public PBFTProtocol(Properties props) throws NumberFormatException, UnknownHostException {
 		super(PBFTProtocol.PROTO_NAME, PBFTProtocol.PROTO_ID);
@@ -83,9 +82,8 @@ public class PBFTProtocol extends GenericProtocol {
 		
 		viewNumber = 1;
 		prepareMessagesReceived = 0;
-
-		log = new HashMap<>();
 		
+		opsMap = new OpsMap();
 		
 		view = new LinkedList<>();
 		String[] membership = props.getProperty(INITIAL_MEMBERSHIP_KEY).split(",");
@@ -158,11 +156,16 @@ public class PBFTProtocol extends GenericProtocol {
 		logger.info("Received propose request: " + req);
 		//check if the node is the leader
 		if (currentSeqN.getNode().equals(self)){
-			//TODO: check if the request is valid (not a duplicate, etc)
-			//TODO: add the request to the batch
-			
-			//TODO: ! What do we parse as the operation? 
-			PrePrepareMessage prePrepareMsg = new PrePrepareMessage(viewNumber, currentSeqN, "default operation");
+
+			if (opsMap.containsOp(req.getTimestamp())){
+				logger.warn("Request received :" + req + "is a duplicate");
+				return;
+			}
+
+			int operationHash = req.hashCode();
+
+			PrePrepareMessage prePrepareMsg = new PrePrepareMessage(viewNumber, currentSeqN, operationHash);
+			opsMap.addOp(req.getTimestamp(), operationHash);
 
 			view.forEach(node -> {
 				if (!node.equals(self)){
@@ -207,7 +210,7 @@ public class PBFTProtocol extends GenericProtocol {
 				//TODO: add the message to the batch
 
 				//send a prepare message to all nodes in the view
-				PrepareMessage prepareMsg = new PrepareMessage(viewNumber, currentSeqN, msg.getOp().hashCode(), 0);
+				PrepareMessage prepareMsg = new PrepareMessage(viewNumber, currentSeqN, msg.getOp(), 0);
 
 				view.forEach(node -> {
 					if (!node.equals(self)){
@@ -256,12 +259,12 @@ public class PBFTProtocol extends GenericProtocol {
 			
 			MessageIdentifier msgId = new MessageIdentifier(msg.getViewNumber(), msg.getSeqNumber().getCounter());
 
-			for(MessageIdentifier id : log.keySet()){
-				if(id.equals(msgId)){
-					PrePrepareMessage msgInLog = (PrePrepareMessage) log.get(id);
-					return msg.getOp().hashCode() == msgInLog.getOp().hashCode();
-				}
-			}
+			// for(MessageIdentifier id : log.keySet()){
+			// 	if(id.equals(msgId)){
+			// 		PrePrepareMessage msgInLog = (PrePrepareMessage) log.get(id);
+			// 		return msg.getOp() == msgInLog.getOp();
+			// 	}
+			// }
 		}
 		else
 			throw new IllegalArgumentException("Message is not valid");
