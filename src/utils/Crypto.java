@@ -31,6 +31,22 @@ public class Crypto {
         return (PrivateKey) ks.getKey(me, keyStorePassword);
     }
 
+    public static PublicKey getPublicKey(String me, Properties props) throws
+            KeyStoreException, IOException, NoSuchAlgorithmException, CertificateException, UnrecoverableKeyException {
+
+        String keyStoreLocation = props.getProperty(KEY_STORE_LOCATION_KEY)+"/"+me+".ks";
+        char[] keyStorePassword = props.getProperty(KEY_STORE_PASSWORD_KEY).toCharArray();
+
+
+        KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+
+        try (FileInputStream fis = new FileInputStream(keyStoreLocation)) {
+            ks.load(fis, keyStorePassword);
+        }
+
+        return ks.getCertificate(me).getPublicKey();
+    }
+
     public static KeyStore getTruststore(Properties props) throws KeyStoreException, IOException, NoSuchAlgorithmException, CertificateException {
 
         String trustStoreLocation = props.getProperty(TRUST_STORE_LOCATION_KEY);
