@@ -3,11 +3,13 @@ package consensus;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.security.InvalidKeyException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.security.SignatureException;
 import java.security.Timestamp;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
@@ -26,9 +28,13 @@ import consensus.messages.PrepareMessage;
 import consensus.notifications.ViewChange;
 import consensus.requests.ProposeRequest;
 import io.netty.buffer.ByteBuf;
+import static io.netty.buffer.Unpooled.*;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
 import pt.unl.fct.di.novasys.babel.generic.ProtoMessage;
+import pt.unl.fct.di.novasys.babel.generic.signed.InvalidFormatException;
+import pt.unl.fct.di.novasys.babel.generic.signed.InvalidSerializerException;
+import pt.unl.fct.di.novasys.babel.generic.signed.NoSignaturePresentException;
 import pt.unl.fct.di.novasys.channel.tcp.MultithreadedTCPChannel;
 import pt.unl.fct.di.novasys.channel.tcp.TCPChannel;
 import pt.unl.fct.di.novasys.channel.tcp.events.InConnectionDown;
@@ -57,7 +63,7 @@ public class PBFTProtocol extends GenericProtocol {
 	
 	private String cryptoName;
 	private KeyStore truststore;
-	private PrivateKey key;
+	private PrivateKey privKey;
 	public PublicKey pubKey;
 
 	//Leadership
@@ -105,7 +111,7 @@ public class PBFTProtocol extends GenericProtocol {
 		try {
 			cryptoName = props.getProperty(Crypto.CRYPTO_NAME_KEY);
 			truststore = Crypto.getTruststore(props);
-			key = Crypto.getPrivateKey(cryptoName, props);
+			privKey = Crypto.getPrivateKey(cryptoName, props);
 			pubKey = Crypto.getPublicKey(cryptoName, props);
 		} catch (UnrecoverableKeyException | KeyStoreException | NoSuchAlgorithmException | CertificateException
 				| IOException e) {
@@ -167,12 +173,14 @@ public class PBFTProtocol extends GenericProtocol {
 			}
 
 			int operationHash = req.hashCode();
-			PrePrepareMessage prePrepareMsg = new PrePrepareMessage(viewNumber, currentSeqN, operationHash);
+			PrePrepareMessage prePrepareMsg = new PrePrepareMessage(viewNumber, currentSeqN, operationHash,cryptoName);
 
-			//Signature of the message
-			ByteBuf serialize;
-			prePrepareMsg.getSerializer().serialize(prePrepareMsg, serialize);
-			// byte[] signature = SignaturesHelper.generateSignature(serialize, key);
+			try {
+				prePrepareMsg.signMessage(privKey);
+			} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException
+					| InvalidSerializerException e) {
+				e.printStackTrace();
+			}
 			opsMap.addOp(req.getTimestamp(), operationHash);
 
 			view.forEach(node -> {	
@@ -210,11 +218,13 @@ public class PBFTProtocol extends GenericProtocol {
     }
 
 	private void uponPrePrepareMessage(PrePrepareMessage msg, Host from, short sourceProto, int channel){
-		logger.info("Received pre-prepare message: " + msg);
+		
+		logger.info("Received pre-prepare message: " + msg );
 		if (msg.getViewNumber() == viewNumber){
 			
-			if(checkValidMessage(msg)){
+			if(checkValidMessage(msg,from)){
 
+				logger.info("Signed ");
 				//TODO: add the message to the batch
 
 				//send a prepare message to all nodes in the view
@@ -261,23 +271,22 @@ public class PBFTProtocol extends GenericProtocol {
 	}
 
 
-	private boolean checkValidMessage(Object msgObj){
+	private boolean checkValidMessage(Object msgObj,Host from){
 		if(msgObj instanceof PrePrepareMessage){
 			PrePrepareMessage msg = (PrePrepareMessage) msgObj;
-			
-			// MessageIdentifier msgId = new MessageIdentifier(msg.getViewNumber(), msg.getSeqNumber().getCounter());
-
-			// for(MessageIdentifier id : log.keySet()){
-			// 	if(id.equals(msgId)){
-			// 		PrePrepareMessage msgInLog = (PrePrepareMessage) log.get(id);
-			// 		return msg.getOp() == msgInLog.getOp();
-			// 	}
-			// }
+			boolean check;
+			try{
+				check = msg.checkSignature(truststore.getCertificate(msg.cryptoName).getPublicKey());
+			}
+			catch(InvalidFormatException | NoSignaturePresentException | NoSuchAlgorithmException | InvalidKeyException |
+			SignatureException | KeyStoreException e){
+				logger.error("Error checking signature in " + msg.getClass() + " from " + from + ": " + e.getMessage());
+				return false;
+			}
+			return check;
 		}
 		else
 			throw new IllegalArgumentException("Message is not valid");
-
-		return false;
 	}
 		
 }
