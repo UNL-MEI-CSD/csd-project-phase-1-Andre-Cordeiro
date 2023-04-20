@@ -14,12 +14,14 @@ public class PrePrepareMessage extends SignedProtoMessage {
 	public final int vN; // View Number
 	public final SeqN sN; // Sequence Number
 	public final int operationHash; // Operation
+	public byte[] signature; // Signature
 	
 	public PrePrepareMessage(int vN, SeqN sN, int operationHash) {  
 		super(PrePrepareMessage.MESSAGE_ID);
 		this.vN = vN;
 		this.sN = sN;
 		this.operationHash = operationHash;
+		this.signature = null;
 	}
 
 	public static SignedMessageSerializer<PrePrepareMessage> serializer = new SignedMessageSerializer<PrePrepareMessage>() {
@@ -30,6 +32,8 @@ public class PrePrepareMessage extends SignedProtoMessage {
 			signedProtoMessage.sN.serialize(out);
 			out.writeInt(signedProtoMessage.operationHash);
 		}
+
+		
 
 		@Override
 		public PrePrepareMessage deserializeBody(ByteBuf in) throws IOException {
@@ -52,6 +56,7 @@ public class PrePrepareMessage extends SignedProtoMessage {
 		return "PrePrepareMessage{" +
 				"vN=" + vN +
 				", sN=" + sN +
+				", operationHash=" + operationHash +
 				'}';
 	}
 
@@ -65,6 +70,14 @@ public class PrePrepareMessage extends SignedProtoMessage {
 
 	public int getOp(){
 		return operationHash ;
+	}
+
+	public byte[] getSignature() {
+		return signature;
+	}
+
+	public void setSignature(byte[] signature) {
+		this.signature = signature;
 	}
 
 }

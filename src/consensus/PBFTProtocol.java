@@ -7,6 +7,7 @@ import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.security.Timestamp;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
@@ -24,6 +25,7 @@ import consensus.messages.PrePrepareMessage;
 import consensus.messages.PrepareMessage;
 import consensus.notifications.ViewChange;
 import consensus.requests.ProposeRequest;
+import io.netty.buffer.ByteBuf;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
 import pt.unl.fct.di.novasys.babel.generic.ProtoMessage;
@@ -56,6 +58,7 @@ public class PBFTProtocol extends GenericProtocol {
 	private String cryptoName;
 	private KeyStore truststore;
 	private PrivateKey key;
+	public PublicKey pubKey;
 
 	//Leadership
 	private SeqN currentSeqN;
@@ -103,6 +106,7 @@ public class PBFTProtocol extends GenericProtocol {
 			cryptoName = props.getProperty(Crypto.CRYPTO_NAME_KEY);
 			truststore = Crypto.getTruststore(props);
 			key = Crypto.getPrivateKey(cryptoName, props);
+			pubKey = Crypto.getPublicKey(cryptoName, props);
 		} catch (UnrecoverableKeyException | KeyStoreException | NoSuchAlgorithmException | CertificateException
 				| IOException e) {
 			// TODO Auto-generated catch block
@@ -163,11 +167,15 @@ public class PBFTProtocol extends GenericProtocol {
 			}
 
 			int operationHash = req.hashCode();
-
 			PrePrepareMessage prePrepareMsg = new PrePrepareMessage(viewNumber, currentSeqN, operationHash);
+
+			//Signature of the message
+			ByteBuf serialize;
+			prePrepareMsg.getSerializer().serialize(prePrepareMsg, serialize);
+			// byte[] signature = SignaturesHelper.generateSignature(serialize, key);
 			opsMap.addOp(req.getTimestamp(), operationHash);
 
-			view.forEach(node -> {
+			view.forEach(node -> {	
 				if (!node.equals(self)){
 					sendMessage(prePrepareMsg, node);
 				}
@@ -204,7 +212,7 @@ public class PBFTProtocol extends GenericProtocol {
 	private void uponPrePrepareMessage(PrePrepareMessage msg, Host from, short sourceProto, int channel){
 		logger.info("Received pre-prepare message: " + msg);
 		if (msg.getViewNumber() == viewNumber){
-			//TODO: check if the message is valid (not a duplicate, etc)
+			
 			if(checkValidMessage(msg)){
 
 				//TODO: add the message to the batch
@@ -257,7 +265,7 @@ public class PBFTProtocol extends GenericProtocol {
 		if(msgObj instanceof PrePrepareMessage){
 			PrePrepareMessage msg = (PrePrepareMessage) msgObj;
 			
-			MessageIdentifier msgId = new MessageIdentifier(msg.getViewNumber(), msg.getSeqNumber().getCounter());
+			// MessageIdentifier msgId = new MessageIdentifier(msg.getViewNumber(), msg.getSeqNumber().getCounter());
 
 			// for(MessageIdentifier id : log.keySet()){
 			// 	if(id.equals(msgId)){
