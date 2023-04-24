@@ -75,4 +75,8 @@ public class PrepareMessage extends SignedProtoMessage {
 	public int getInstanceNumber(){
 		return instanceNumber;
 	}
+
+	public int getOp() {
+		return hashOpVal;
+	}
 }

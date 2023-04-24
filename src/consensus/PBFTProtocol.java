@@ -75,7 +75,6 @@ public class PBFTProtocol extends GenericProtocol {
 	private int viewNumber;
 	private final List<Host> view;
 	private final int seq;
-	
 	private OpsMap opsMap;
 	private int prepareMessagesReceived;
 	private int f;
@@ -220,6 +219,7 @@ public class PBFTProtocol extends GenericProtocol {
 	private void uponPrePrepareMessage(PrePrepareMessage msg, Host from, short sourceProto, int channel){
 		
 		logger.info("Received pre-prepare message: " + msg );
+
 		if (msg.getViewNumber() == viewNumber){
 			
 			if(checkValidMessage(msg,from)){
@@ -251,10 +251,12 @@ public class PBFTProtocol extends GenericProtocol {
 			if (msg.getSequenceNumber().equals(currentSeqN)){
 				
 				//TODO: check if the message is valid (not a duplicate and well signed)
+
 				prepareMessagesReceived++;
-				if (prepareMessagesReceived == 2 * f + 1){
-					//TODO: send a commit message to all nodes in the view
-					logger.info("Sending commit message");
+				if (prepareMessagesReceived == 2 * f + 1) {
+					logger.info("Sending commit message to all nodes");
+					CommitMessage commitMsg = new CommitMessage(viewNumber, currentSeqN, msg.getOp(), 0);
+					sendMessage(commitMsg, from);
 				}
 			}
 		} else {
@@ -263,11 +265,17 @@ public class PBFTProtocol extends GenericProtocol {
 	}
 
 	private void uponCommitMessage(CommitMessage msg, Host from, short sourceProto, int channel){
-		//TODO
+		if (msg.getViewNumber() == viewNumber) {
+			if (msg.getSequenceNumber().equals(currentSeqN) && checkValidMessage(msg, from)) {
+				//TODO and message to msg log
+				// TODO send reply to client
+				// TODO discard requests whose timestamp is smaller than the timestamp of the last committed operation
+			}
+		}
 	}
 
 	private void uponMessageFailed(ProtoMessage msg, Host from, short sourceProto, int channel){
-		//TODO
+		logger.warn("Failed to deliver message " + msg + " from " + from);
 	}
 
 
