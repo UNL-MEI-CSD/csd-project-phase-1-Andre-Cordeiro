@@ -1,6 +1,7 @@
 package consensus.messages;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 import io.netty.buffer.ByteBuf;
 import pt.unl.fct.di.novasys.babel.generic.signed.SignedMessageSerializer;
@@ -15,12 +16,15 @@ public class CommitMessage extends SignedProtoMessage{
 
 	public final SeqN sN;
 
-    public CommitMessage(int vN, SeqN sN, int hashOpVal, int iN){
+	public final String cryptoName;
+
+    public CommitMessage(int vN, SeqN sN, int hashOpVal, int iN , String cryptoName){
         super(CommitMessage.MESSAGE_ID);
 		this.vN = vN;
 		this.sN = sN;
 		this.hashOpVal = hashOpVal;
 		this.iN = iN;
+		this.cryptoName = cryptoName;
     }
 
     public static final SignedMessageSerializer<CommitMessage> serializer = new SignedMessageSerializer<CommitMessage>() {
@@ -31,6 +35,7 @@ public class CommitMessage extends SignedProtoMessage{
 			signedProtoMessage.sN.serialize(out);
 			out.writeInt(signedProtoMessage.hashOpVal);
 			out.writeInt(signedProtoMessage.iN);
+			out.writeCharSequence(signedProtoMessage.cryptoName, StandardCharsets.UTF_8);
 		}
 
 		@Override
@@ -39,7 +44,8 @@ public class CommitMessage extends SignedProtoMessage{
 			SeqN sN = SeqN.deserialize(in);
 			int hashOpVal = in.readInt();
 			int iN = in.readInt();
-			return new CommitMessage(vN, sN, hashOpVal, iN);
+			String cryptoName = in.readCharSequence(in.readableBytes(), StandardCharsets.UTF_8).toString();
+			return new CommitMessage(vN, sN, hashOpVal, iN,cryptoName);
 		}
 		
 	};
@@ -76,5 +82,9 @@ public class CommitMessage extends SignedProtoMessage{
 
 	public SeqN getSequenceNumber() {
 		return sN;
+	}
+
+	public String getCryptoName() {
+		return cryptoName;
 	}
 }

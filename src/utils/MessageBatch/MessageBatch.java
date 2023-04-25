@@ -14,16 +14,16 @@ public class MessageBatch {
     
 
     public MessageCounter[] getPrePrepareMessage(int opsHash) {
-        return messageBatch.get(opsHash);
+        return this.messageBatch.get(opsHash);
     }
 
-    public boolean containsPrePrepareMessage(int opsHash) {
-        return messageBatch.containsKey(opsHash);
+    public boolean containsMessage(int opsHash) {
+        return this.messageBatch.containsKey(opsHash);
     }
 
     public void addPrePrepareMessage(int opsHash) {
-        if (!messageBatch.containsKey(opsHash)) {
-            messageBatch.put(opsHash, new MessageCounter[3]);
+        if (!this.messageBatch.containsKey(opsHash)) {
+            this.messageBatch.put(opsHash, new MessageCounter[3]);
         }
         else {
             throw new RuntimeException("The opsHash should not be in the map");
@@ -31,8 +31,8 @@ public class MessageBatch {
     }
 
     public int addPrepareMessage(int opsHash) {
-        if (messageBatch.containsKey(opsHash)) {
-            MessageCounter[] messageCounters = messageBatch.get(opsHash);
+        if (this.messageBatch.containsKey(opsHash)) {
+            MessageCounter[] messageCounters = this.messageBatch.get(opsHash);
             messageCounters[1].incrementCounter();
             return messageCounters[1].getCounter();
         }
@@ -42,8 +42,8 @@ public class MessageBatch {
     }
 
     public int addCommitMessage(int opsHash) {
-        if (messageBatch.containsKey(opsHash)) {
-            MessageCounter[] messageCounters = messageBatch.get(opsHash);
+        if (this.messageBatch.containsKey(opsHash)) {
+            MessageCounter[] messageCounters = this.messageBatch.get(opsHash);
             messageCounters[2].incrementCounter();
             return messageCounters[2].getCounter();
         }
@@ -53,11 +53,18 @@ public class MessageBatch {
     }
 
     public void removePrePrepareMessage(int opsHash) {
-        messageBatch.remove(opsHash);
+        this.messageBatch.remove(opsHash);
     }
 
     public void clear() {
-        messageBatch.clear();
+        this.messageBatch.clear();
+    }
+
+    @Override
+    public String toString() {
+        return "MessageBatch{" +
+                "messageBatch=" + this.messageBatch +
+                '}';
     }
 
 

@@ -24,4 +24,11 @@ public class MessageCounter {
         this.counter++;
     }
 
+    @Override
+    public String toString() {
+        return "MessageCounter{" +
+                "message=" + message +
+                ", counter=" + counter +
+                '}';
+    }
 }

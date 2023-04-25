@@ -15,7 +15,6 @@ public class PrePrepareMessage extends SignedProtoMessage {
 	public final int vN; // View Number
 	public final SeqN sN; // Sequence Number
 	public final int operationHash; // Operation
-	public byte[] signature; // Signature
 	public final String cryptoName; //cryptoName
 	
 	public PrePrepareMessage(int vN, SeqN sN, int operationHash, String cryptoName) {  
@@ -24,7 +23,6 @@ public class PrePrepareMessage extends SignedProtoMessage {
 		this.sN = sN;
 		this.operationHash = operationHash;
 		this.cryptoName = cryptoName;
-		this.signature = null;
 	}
 
 	public static SignedMessageSerializer<PrePrepareMessage> serializer = new SignedMessageSerializer<PrePrepareMessage>() {
@@ -77,12 +75,8 @@ public class PrePrepareMessage extends SignedProtoMessage {
 		return operationHash ;
 	}
 
-	public byte[] getSignature() {
-		return signature;
-	}
-
-	public void setSignature(byte[] signature) {
-		this.signature = signature;
+	public String getCryptoName(){
+		return cryptoName;
 	}
 
 }

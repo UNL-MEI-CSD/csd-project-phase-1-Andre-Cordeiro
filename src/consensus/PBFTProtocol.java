@@ -71,7 +71,6 @@ public class PBFTProtocol extends GenericProtocol {
 	private final List<Host> view;
 	private final int seq;
 	private OpsMap opsMap;
-	private int prepareMessagesReceived;
 	private int f;
 	private MessageBatch mb;
 
@@ -85,7 +84,6 @@ public class PBFTProtocol extends GenericProtocol {
 				Integer.parseInt(props.getProperty(PORT_KEY)));
 		
 		viewNumber = 1;
-		prepareMessagesReceived = 0;
 		
 		opsMap = new OpsMap();
 		
@@ -221,10 +219,9 @@ public class PBFTProtocol extends GenericProtocol {
 		if (msg.getViewNumber() == viewNumber){
 			
 			if(checkValidMessage(msg,from)){
-
-
 				try {
 					mb.addPrePrepareMessage(msg.getOp());
+					logger.info("Added pre-prepare message to batch: " + msg);
 				} 
 				catch (RuntimeException e){
 					logger.warn("Received a duplicate pre-prepare message: " + msg);
@@ -232,7 +229,13 @@ public class PBFTProtocol extends GenericProtocol {
 				}
 				
 				//send a prepare message to all nodes in the view
-				PrepareMessage prepareMsg = new PrepareMessage(viewNumber, currentSeqN, msg.getOp(), 0);
+				PrepareMessage prepareMsg = new PrepareMessage(viewNumber, currentSeqN, msg.getOp(), 0 , cryptoName );
+				try {
+					prepareMsg.signMessage(privKey);
+				} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException
+						| InvalidSerializerException e) {
+					e.printStackTrace();
+				}
 
 				view.forEach(node -> {
 					if (!node.equals(self)){
@@ -248,20 +251,34 @@ public class PBFTProtocol extends GenericProtocol {
 	}
 
 	private void uponPrepareMessage(PrepareMessage msg, Host from, short sourceProto, int channel){
-		// wait for 2f+1 prepare messages with the same view number and sequence number
 
 		if (msg.getViewNumber() == viewNumber){
 
 			if (msg.getSequenceNumber().equals(currentSeqN)){
 				
-				//TODO: check if the message is valid (not a duplicate and well signed)
+				if (checkValidMessage(msg,from)){
 
-				prepareMessagesReceived++;
-				if (prepareMessagesReceived == 2 * f + 1) {
-					logger.info("Sending commit message to all nodes");
-					CommitMessage commitMsg = new CommitMessage(viewNumber, currentSeqN, msg.getOp(), 0);
-					sendMessage(commitMsg, from);
+					int prepareMessagesReceived = 0;
+					try {
+						prepareMessagesReceived = mb.addPrepareMessage(msg.getHashOpVal());
+					} catch (RuntimeException e){
+						logger.warn("Received a unknown prepare message: " + msg + mb.getPrePrepareMessage(msg.getHashOpVal()));
+						return;
+					}
+					if (prepareMessagesReceived == 2 * f + 1) {
+						logger.info("Sending commit message to all nodes");
+						CommitMessage commitMsg = new CommitMessage(viewNumber, currentSeqN, msg.getHashOpVal(), 0, cryptoName);
+						try {
+							commitMsg.signMessage(privKey);
+						} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException
+								| InvalidSerializerException e) {
+							e.printStackTrace();
+						}
+						sendMessage(commitMsg, from);
+					}
 				}
+			} else {
+				logger.warn("Received prepare message with wrong sequence number: " + msg);
 			}
 		} else {
 			logger.warn("Received prepare message with wrong view number: " + msg);
@@ -284,21 +301,43 @@ public class PBFTProtocol extends GenericProtocol {
 
 
 	private boolean checkValidMessage(Object msgObj,Host from){
+		boolean check;
 		if(msgObj instanceof PrePrepareMessage){
 			PrePrepareMessage msg = (PrePrepareMessage) msgObj;
-			boolean check;
 			try{
-				check = msg.checkSignature(truststore.getCertificate(msg.cryptoName).getPublicKey());
+				check = msg.checkSignature(truststore.getCertificate(msg.getCryptoName()).getPublicKey());
 			}
 			catch(InvalidFormatException | NoSignaturePresentException | NoSuchAlgorithmException | InvalidKeyException |
 			SignatureException | KeyStoreException e){
 				logger.error("Error checking signature in " + msg.getClass() + " from " + from + ": " + e.getMessage());
 				return false;
 			}
-			return check;
 		}
-		else
+		else if(msgObj instanceof PrepareMessage){
+			PrepareMessage msg = (PrepareMessage) msgObj;
+			try{
+				check = msg.checkSignature(truststore.getCertificate(msg.getCryptoName()).getPublicKey());
+			}
+			catch(InvalidFormatException | NoSignaturePresentException | NoSuchAlgorithmException | InvalidKeyException |
+			SignatureException | KeyStoreException e){
+				logger.error("Error checking signature in " + msg.getClass() + " from " + from + ": " + e.getMessage());
+				return false;
+			}
+		} else if (msgObj instanceof CommitMessage){
+			CommitMessage msg = (CommitMessage) msgObj;
+			try{
+				check = msg.checkSignature(truststore.getCertificate(msg.getCryptoName()).getPublicKey());
+			}
+			catch(InvalidFormatException | NoSignaturePresentException | NoSuchAlgorithmException | InvalidKeyException |
+			SignatureException | KeyStoreException e){
+				logger.error("Error checking signature in " + msg.getClass() + " from " + from + ": " + e.getMessage());
+				return false;
+			}
+		} else {
+			logger.error("Unknown message type: " + msgObj.getClass());
 			throw new IllegalArgumentException("Message is not valid");
+		}
+		return check;
 	}
 		
 }
