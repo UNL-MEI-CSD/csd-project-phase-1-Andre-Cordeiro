@@ -10,13 +10,10 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.SignatureException;
-import java.security.Timestamp;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
@@ -28,8 +25,6 @@ import consensus.messages.PrePrepareMessage;
 import consensus.messages.PrepareMessage;
 import consensus.notifications.ViewChange;
 import consensus.requests.ProposeRequest;
-import io.netty.buffer.ByteBuf;
-import static io.netty.buffer.Unpooled.*;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
 import pt.unl.fct.di.novasys.babel.generic.ProtoMessage;
@@ -46,6 +41,7 @@ import pt.unl.fct.di.novasys.channel.tcp.events.OutConnectionUp;
 import pt.unl.fct.di.novasys.network.data.Host;
 import utils.Crypto;
 import utils.SeqN;
+import utils.MessageBatch.MessageBatch;
 import utils.Operation.OpsMap;
 import utils.Operation.OpsMapKey;
 
@@ -77,6 +73,7 @@ public class PBFTProtocol extends GenericProtocol {
 	private OpsMap opsMap;
 	private int prepareMessagesReceived;
 	private int f;
+	private MessageBatch mb;
 
 	
 	public PBFTProtocol(Properties props) throws NumberFormatException, UnknownHostException {
@@ -100,6 +97,8 @@ public class PBFTProtocol extends GenericProtocol {
 		}
 		f = (view.size() - 1) / 3;
 		currentSeqN = new SeqN(0, view.get(0));
+
+		mb = new MessageBatch();
 		
 	}
 
@@ -223,9 +222,15 @@ public class PBFTProtocol extends GenericProtocol {
 			
 			if(checkValidMessage(msg,from)){
 
-				
-				//TODO: add the message to the batch
 
+				try {
+					mb.addPrePrepareMessage(msg.getOp());
+				} 
+				catch (RuntimeException e){
+					logger.warn("Received a duplicate pre-prepare message: " + msg);
+					return;
+				}
+				
 				//send a prepare message to all nodes in the view
 				PrepareMessage prepareMsg = new PrepareMessage(viewNumber, currentSeqN, msg.getOp(), 0);
 

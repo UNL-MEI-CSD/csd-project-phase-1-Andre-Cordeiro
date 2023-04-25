@@ -2,11 +2,10 @@ package utils.MessageBatch;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 public class MessageBatch {
 
-    private Map<UUID, MessageCounter[]> messageBatch;
+    private Map<Integer, MessageCounter[]> messageBatch;
 
     public MessageBatch() {
         this.messageBatch = new HashMap<>();
@@ -14,46 +13,47 @@ public class MessageBatch {
 
     
 
-    public MessageCounter[] getPrePrepareMessage(UUID id) {
-        return messageBatch.get(id);
+    public MessageCounter[] getPrePrepareMessage(int opsHash) {
+        return messageBatch.get(opsHash);
     }
 
-    public boolean containsPrePrepareMessage(UUID id) {
-        return messageBatch.containsKey(id);
+    public boolean containsPrePrepareMessage(int opsHash) {
+        return messageBatch.containsKey(opsHash);
     }
 
-    public void addPrePrepareMessage(UUID id) {
-        if (!messageBatch.containsKey(id)) {
-            messageBatch.put(id, new MessageCounter[3]);
+    public void addPrePrepareMessage(int opsHash) {
+        if (!messageBatch.containsKey(opsHash)) {
+            messageBatch.put(opsHash, new MessageCounter[3]);
         }
         else {
-            MessageCounter[] messageCounters = messageBatch.get(id);
-            messageCounters[0].incrementCounter();
+            throw new RuntimeException("The opsHash should not be in the map");
         }
     }
 
-    public void addPrepareMessage(UUID id) {
-        if (messageBatch.containsKey(id)) {
-            MessageCounter[] messageCounters = messageBatch.get(id);
+    public int addPrepareMessage(int opsHash) {
+        if (messageBatch.containsKey(opsHash)) {
+            MessageCounter[] messageCounters = messageBatch.get(opsHash);
             messageCounters[1].incrementCounter();
+            return messageCounters[1].getCounter();
         }
         else {
-            throw new RuntimeException("The id should be in the map");
+            throw new RuntimeException("The opsHash should be in the map");
         }
     }
 
-    public void addCommitMessage(UUID id) {
-        if (messageBatch.containsKey(id)) {
-            MessageCounter[] messageCounters = messageBatch.get(id);
+    public int addCommitMessage(int opsHash) {
+        if (messageBatch.containsKey(opsHash)) {
+            MessageCounter[] messageCounters = messageBatch.get(opsHash);
             messageCounters[2].incrementCounter();
+            return messageCounters[2].getCounter();
         }
         else {
-            throw new RuntimeException("The id should be in the map");
+            throw new RuntimeException("The opsHash should be in the map");
         }
     }
 
-    public void removePrePrepareMessage(UUID id) {
-        messageBatch.remove(id);
+    public void removePrePrepareMessage(int opsHash) {
+        messageBatch.remove(opsHash);
     }
 
     public void clear() {
