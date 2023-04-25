@@ -18,6 +18,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.UUID;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -45,10 +46,8 @@ import pt.unl.fct.di.novasys.channel.tcp.events.OutConnectionUp;
 import pt.unl.fct.di.novasys.network.data.Host;
 import utils.Crypto;
 import utils.SeqN;
-import utils.SignaturesHelper;
 import utils.Operation.OpsMap;
 import utils.Operation.OpsMapKey;
-import utils.MessageIdentifier;
 
 
 public class PBFTProtocol extends GenericProtocol {
@@ -180,7 +179,7 @@ public class PBFTProtocol extends GenericProtocol {
 					| InvalidSerializerException e) {
 				e.printStackTrace();
 			}
-			opsMap.addOp(opsMapKey, req.getBlock());
+			opsMap.addOp(opsMapKey, UUID.randomUUID());
 
 			view.forEach(node -> {	
 				if (!node.equals(self)){
@@ -224,7 +223,7 @@ public class PBFTProtocol extends GenericProtocol {
 			
 			if(checkValidMessage(msg,from)){
 
-				logger.info("Signed ");
+				
 				//TODO: add the message to the batch
 
 				//send a prepare message to all nodes in the view

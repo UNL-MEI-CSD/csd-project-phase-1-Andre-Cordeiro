@@ -2,20 +2,21 @@ package utils.Operation;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 public class OpsMap {
         
-        private Map<OpsMapKey, byte[]> opsMap;
+        private Map<OpsMapKey, UUID> opsMap;
         
         public OpsMap() {
                 opsMap = new HashMap<>();
         }
         
-        public void addOp(OpsMapKey opsMapKey, byte[] op) {
-                opsMap.put(opsMapKey, op);
+        public void addOp(OpsMapKey opsMapKey, UUID id) {
+                opsMap.put(opsMapKey, id);
         }
 
-        public byte[] getOp(OpsMapKey opsMapKey) {
+        public UUID getOp(OpsMapKey opsMapKey) {
                 return opsMap.get(opsMapKey);
         }
 
@@ -35,7 +36,7 @@ public class OpsMap {
                 return opsMap.size();
         }
 
-        public Map<OpsMapKey, byte[]> getOpsMap() {
+        public Map<OpsMapKey, UUID> getOpsMap() {
                 return opsMap;
         }
 
