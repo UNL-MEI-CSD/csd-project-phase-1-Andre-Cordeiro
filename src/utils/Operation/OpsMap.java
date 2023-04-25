@@ -1,32 +1,30 @@
 package utils.Operation;
 
-
-import java.sql.Timestamp;
 import java.util.HashMap;
 import java.util.Map;
 
 public class OpsMap {
         
-        private Map<Timestamp, Integer> opsMap;
+        private Map<OpsMapKey, byte[]> opsMap;
         
         public OpsMap() {
                 opsMap = new HashMap<>();
         }
         
-        public void addOp(Timestamp timestamp, int op) {
-                opsMap.put(timestamp, op);
+        public void addOp(OpsMapKey opsMapKey, byte[] op) {
+                opsMap.put(opsMapKey, op);
         }
 
-        public int getOp(Timestamp timestamp) {
-                return opsMap.get(timestamp);
+        public byte[] getOp(OpsMapKey opsMapKey) {
+                return opsMap.get(opsMapKey);
         }
 
-        public boolean containsOp(Timestamp timestamp) {
-                return opsMap.containsKey(timestamp);
+        public boolean containsOp(OpsMapKey opsMapKey) {
+                return opsMap.containsKey(opsMapKey);
         }
 
-        public void removeOp(Timestamp timestamp) {
-                opsMap.remove(timestamp);
+        public void removeOp(OpsMapKey opsMapKey) {
+                opsMap.remove(opsMapKey);
         }
 
         public void clear() {
@@ -37,7 +35,7 @@ public class OpsMap {
                 return opsMap.size();
         }
 
-        public Map<Timestamp, Integer> getOpsMap() {
+        public Map<OpsMapKey, byte[]> getOpsMap() {
                 return opsMap;
         }
 

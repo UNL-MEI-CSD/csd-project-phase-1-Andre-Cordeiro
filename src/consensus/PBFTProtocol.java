@@ -47,6 +47,7 @@ import utils.Crypto;
 import utils.SeqN;
 import utils.SignaturesHelper;
 import utils.Operation.OpsMap;
+import utils.Operation.OpsMapKey;
 import utils.MessageIdentifier;
 
 
@@ -68,7 +69,6 @@ public class PBFTProtocol extends GenericProtocol {
 
 	//Leadership
 	private SeqN currentSeqN;
-	private boolean iAmCurrentLeader;
 	
 	//TODO: add protocol state (related with the internal operation of the view)
 	private Host self;
@@ -101,7 +101,6 @@ public class PBFTProtocol extends GenericProtocol {
 		}
 		f = (view.size() - 1) / 3;
 		currentSeqN = new SeqN(0, view.get(0));
-		iAmCurrentLeader = self.equals(view.get(0));
 		
 	}
 
@@ -166,7 +165,8 @@ public class PBFTProtocol extends GenericProtocol {
 		//check if the node is the leader
 		if (currentSeqN.getNode().equals(self)){
 
-			if (opsMap.containsOp(req.getTimestamp())){
+			OpsMapKey opsMapKey = new OpsMapKey(req.getTimestamp(), req.hashCode());
+			if (opsMap.containsOp(opsMapKey)){
 				logger.warn("Request received :" + req + "is a duplicate");
 				return;
 			}
@@ -180,7 +180,7 @@ public class PBFTProtocol extends GenericProtocol {
 					| InvalidSerializerException e) {
 				e.printStackTrace();
 			}
-			opsMap.addOp(req.getTimestamp(), operationHash);
+			opsMap.addOp(opsMapKey, req.getBlock());
 
 			view.forEach(node -> {	
 				if (!node.equals(self)){
