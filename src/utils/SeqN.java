@@ -6,7 +6,7 @@ import pt.unl.fct.di.novasys.network.data.Host;
 import java.util.Objects;
 
 public class SeqN implements Comparable<SeqN>{
-    private final int counter;
+    private int counter;
     private final Host node;
 
     public SeqN(int counter, Host node){
@@ -16,6 +16,10 @@ public class SeqN implements Comparable<SeqN>{
 
     public int getCounter(){
         return counter;
+    }
+
+    public void increment(){
+        counter++;
     }
 
     public Host getNode(){

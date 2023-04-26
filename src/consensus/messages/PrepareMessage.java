@@ -7,22 +7,19 @@ import io.netty.buffer.ByteBuf;
 import pt.unl.fct.di.novasys.babel.generic.signed.SignedMessageSerializer;
 import pt.unl.fct.di.novasys.babel.generic.signed.SignedProtoMessage;
 import utils.SeqN;
+import utils.MessageBatch.MessageBatchKey;
 
 public class PrepareMessage extends SignedProtoMessage {
 
 	public final static short MESSAGE_ID = 102;	
 	
-	public final int viewNumber;
-	public final SeqN sequenceNumber;
-	public final int hashOpVal;
+	public final MessageBatchKey batchKey;
 	public final int instanceNumber;
 	public final String cryptoName;
 	
-	public PrepareMessage(int viewNumber, SeqN sequenceNumber, int hashOpVal, int instanceNumber, String cryptoName) {
+	public PrepareMessage(MessageBatchKey batchKey, int instanceNumber, String cryptoName) {
 		super(PrepareMessage.MESSAGE_ID);
-		this.viewNumber = viewNumber;
-		this.sequenceNumber = sequenceNumber;
-		this.hashOpVal = hashOpVal;
+		this.batchKey = batchKey;
 		this.instanceNumber = instanceNumber;
 		this.cryptoName = cryptoName;
 	}
@@ -31,21 +28,19 @@ public class PrepareMessage extends SignedProtoMessage {
 
 		@Override
 		public void serializeBody(PrepareMessage signedProtoMessage, ByteBuf out) throws IOException {
-			out.writeInt(signedProtoMessage.viewNumber);
-			signedProtoMessage.sequenceNumber.serialize(out);
-			out.writeInt(signedProtoMessage.hashOpVal);
+			out.writeInt(signedProtoMessage.batchKey.getOpsHash());
+			signedProtoMessage.batchKey.getSeqN().serialize(out);
+			out.writeInt(signedProtoMessage.batchKey.getViewNumber());
 			out.writeInt(signedProtoMessage.instanceNumber);
 			out.writeCharSequence(signedProtoMessage.cryptoName, StandardCharsets.UTF_8);
 		}
 
 		@Override
 		public PrepareMessage deserializeBody(ByteBuf in) throws IOException {
-			int vN = in.readInt();
-			SeqN sN = SeqN.deserialize(in);
-			int hashOpVal = in.readInt();
+			MessageBatchKey batchKey = new MessageBatchKey(in.readInt(), SeqN.deserialize(in), in.readInt());
 			int instanceNumber = in.readInt();
 			String cryptoName = in.readCharSequence(in.readableBytes(), StandardCharsets.UTF_8).toString();
-			return new PrepareMessage(vN, sN, hashOpVal, instanceNumber, cryptoName);
+			return new PrepareMessage(batchKey, instanceNumber, cryptoName);
 		}
 		
 	};
@@ -58,24 +53,15 @@ public class PrepareMessage extends SignedProtoMessage {
 	@Override
 	public String toString() {
 		return "PrepareMessage{" +
-				"viewNumber=" + viewNumber +
-				", sequenceNumber=" + sequenceNumber +
-				", hashOpVal=" + hashOpVal +
+				"batchKey=" + batchKey +
 				", instanceNumber=" + instanceNumber +
 				'}';
 	}
 
-	public int getViewNumber(){
-		return viewNumber;
+	public MessageBatchKey getBatchKey(){
+		return batchKey;
 	}
-
-	public SeqN getSequenceNumber(){
-		return sequenceNumber;
-	}
-
-	public int getHashOpVal(){
-		return hashOpVal;
-	}
+	
 
 	public int getInstanceNumber(){
 		return instanceNumber;

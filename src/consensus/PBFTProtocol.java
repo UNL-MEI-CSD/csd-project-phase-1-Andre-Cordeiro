@@ -44,6 +44,7 @@ import pt.unl.fct.di.novasys.network.data.Host;
 import utils.Crypto;
 import utils.SeqN;
 import utils.MessageBatch.MessageBatch;
+import utils.MessageBatch.MessageBatchKey;
 import utils.Operation.OpsMap;
 import utils.Operation.OpsMapKey;
 
@@ -71,7 +72,6 @@ public class PBFTProtocol extends GenericProtocol {
 	private Host self;
 	private int viewNumber;
 	private final List<Host> view;
-	private final int seq;
 	private OpsMap opsMap;
 	private int f;
 	private MessageBatch mb;
@@ -79,8 +79,6 @@ public class PBFTProtocol extends GenericProtocol {
 	
 	public PBFTProtocol(Properties props) throws NumberFormatException, UnknownHostException {
 		super(PBFTProtocol.PROTO_NAME, PBFTProtocol.PROTO_ID);
-	
-		this.seq = 0;
 
 		self = new Host(InetAddress.getByName(props.getProperty(ADDRESS_KEY)),
 				Integer.parseInt(props.getProperty(PORT_KEY)));
@@ -169,8 +167,10 @@ public class PBFTProtocol extends GenericProtocol {
 				return;
 			}
 
+			currentSeqN.increment();
 			int operationHash = opsMapKey.hashCode();
-			PrePrepareMessage prePrepareMsg = new PrePrepareMessage(viewNumber, currentSeqN, operationHash,cryptoName);
+			MessageBatchKey mbKey = new MessageBatchKey(operationHash, currentSeqN, viewNumber);
+			PrePrepareMessage prePrepareMsg = new PrePrepareMessage(mbKey,cryptoName);
 
 			try {
 				prePrepareMsg.signMessage(privKey);
@@ -184,7 +184,7 @@ public class PBFTProtocol extends GenericProtocol {
 				if (!node.equals(self)){
 					sendMessage(prePrepareMsg, node);
 				} else {
-					mb.addMessage(operationHash);
+					mb.addMessage(mbKey.hashCode());
 				}
 			});
 		}
@@ -217,107 +217,91 @@ public class PBFTProtocol extends GenericProtocol {
     }
 
 	private void uponPrePrepareMessage(PrePrepareMessage msg, Host from, short sourceProto, int channel){
-
-		if (msg.getViewNumber() == viewNumber){
 			
-			if(checkValidMessage(msg,from)){
-				try {
-					mb.addMessage(msg.getOp());
-				}
-				catch (RuntimeException e){
-					logger.warn("Received a duplicate pre-prepare message: " + msg);
-					return;
-				}
-				
-				//send a prepare message to all nodes in the view
-				PrepareMessage prepareMsg = new PrepareMessage(viewNumber, currentSeqN, msg.getOp(), 0 , cryptoName );
-				try {
-					prepareMsg.signMessage(privKey);
-				} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException
-						| InvalidSerializerException e) {
-					e.printStackTrace();
-				}
-
-				view.forEach(node -> {
-					if (!node.equals(self)){
-						sendMessage(prepareMsg, node);
-					} else {
-						mb.addPrepareMessage(msg.getOp());
-					}
-				});
+		if(checkValidMessage(msg,from)){
+			try {
+				mb.addMessage(msg.getBatchKey().hashCode());
+			}
+			catch (RuntimeException e){
+				logger.warn("Received a duplicate pre-prepare message: " + msg);
+				return;
+			}
+			
+			//send a prepare message to all nodes in the view
+			PrepareMessage prepareMsg = new PrepareMessage( msg.getBatchKey(), 0 , cryptoName );
+			try {
+				prepareMsg.signMessage(privKey);
+			} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException
+					| InvalidSerializerException e) {
+				e.printStackTrace();
 			}
 
-		} else {
-			logger.warn("Received pre-prepare message with wrong view number: " + msg);
+			view.forEach(node -> {
+				if (!node.equals(self)){
+					sendMessage(prepareMsg, node);
+				} else {
+					mb.addPrepareMessage(msg.getBatchKey().hashCode());
+				}
+			});
 		}
 	}
 
 	private void uponPrepareMessage(PrepareMessage msg, Host from, short sourceProto, int channel){
+	
+		if (checkValidMessage(msg,from)){
 
-		if (msg.getViewNumber() == viewNumber){
-
-			if (msg.getSequenceNumber().equals(currentSeqN)){
-				
-				if (checkValidMessage(msg,from)){
-
-					int prepareMessagesReceived = 0;
-					try {
-						if (mb.containsMessage(msg.getHashOpVal())) {
-							prepareMessagesReceived = mb.addPrepareMessage(msg.getHashOpVal());
-						}
-						else {
-							logger.warn("Received a prepare message for an unknown operation: " + msg);
-							return;
-						}
-					} catch (RuntimeException e){
-						logger.warn("Received a unknown prepare message: " + msg + mb.getValues(msg.getHashOpVal()));
-						return;
-					}
-					if (prepareMessagesReceived == 2 * f + 1) {
-						CommitMessage commitMsg = new CommitMessage(viewNumber, currentSeqN, msg.getHashOpVal(), 0, cryptoName);
-						try {
-							commitMsg.signMessage(privKey);
-						} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException
-								| InvalidSerializerException e) {
-							e.printStackTrace();
-						}
-						view.forEach(node -> {
-							if (!node.equals(self)){
-								sendMessage(commitMsg, node);
-							}
-						});
-					}
+			int prepareMessagesReceived = 0;
+			try {
+				int hash = msg.getBatchKey().hashCode();
+				if (mb.containsMessage(hash)) {
+					prepareMessagesReceived = mb.addPrepareMessage(hash);
 				}
-			} else {
-				logger.warn("Received prepare message with wrong sequence number: " + msg);
+				else {
+					logger.warn("Received a prepare message for an unknown operation: " + msg);
+					return;
+				}
+			} catch (RuntimeException e){
+				logger.warn("Received a unknown prepare message: " + msg + mb.getValues(msg.getBatchKey().hashCode()));
+				return;
 			}
-		} else {
-			logger.warn("Received prepare message with wrong view number: " + msg);
+			if (prepareMessagesReceived == 2 * f + 1) {
+				CommitMessage commitMsg = new CommitMessage(msg.getBatchKey(), 0, cryptoName);
+				try {
+					commitMsg.signMessage(privKey);
+				} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException
+						| InvalidSerializerException e) {
+					e.printStackTrace();
+				}
+				view.forEach(node -> {
+					if (!node.equals(self)){
+						sendMessage(commitMsg, node);
+					}
+				});
+			}
 		}
 	}
 
 	private void uponCommitMessage(CommitMessage msg, Host from, short sourceProto, int channel){
-		
-		if (msg.getViewNumber() == viewNumber) {
-			if (msg.getSequenceNumber().equals(currentSeqN) && checkValidMessage(msg, from)) {
-				int commitMessagesReceived = 0;
-				try {
-					if (mb.containsMessage(msg.getHashOpVal())) {
-						commitMessagesReceived = mb.addCommitMessage(msg.getHashOpVal());
-					}
-					else {
-						logger.warn("Received a commit message for an unknown operation: " + msg);
-						return;
-					}
-				} catch (RuntimeException e){
-					logger.warn("Received a unknown commit message: " + msg + mb.getValues(msg.getHashOpVal()));
+
+		if (checkValidMessage(msg, from)) {
+			int commitMessagesReceived = 0;
+			try {
+				int hash = msg.getBatchKey().hashCode();
+				if (mb.containsMessage(hash)) {
+					commitMessagesReceived = mb.addCommitMessage(hash);
+				}
+				else {
+					logger.warn("Received a commit message for an unknown operation: " + msg);
 					return;
 				}
-				if (commitMessagesReceived == f + 1) {
-					//TODO send reply to client
-					//TODO discard requests whose timestamp is smaller than the timestamp of the last committed operation
-					sendReply(new Reply(viewNumber, opsMap.getOp(msg.getHashOpVal()),cryptoName), BlockChainProtocol.PROTO_ID);
-				}
+			} catch (RuntimeException e){
+				logger.warn("Received a unknown commit message: " + msg + mb.getValues(msg.getBatchKey().hashCode()));
+				return;
+			}
+			if (commitMessagesReceived == f + 1) {
+				//TODO send reply to client
+				//TODO discard requests whose timestamp is smaller than the timestamp of the last committed operation
+				sendReply(new Reply(msg.getBatchKey().getViewNumber(),opsMap.getOp(msg.getBatchKey().hashCode()),cryptoName), BlockChainProtocol.PROTO_ID);
 			}
 		}
 	}
