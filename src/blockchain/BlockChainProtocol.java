@@ -33,7 +33,7 @@ import utils.SignaturesHelper;
 public class BlockChainProtocol extends GenericProtocol {
 
 	private static final String PROTO_NAME = "blockchain";
-	private static final short PROTO_ID = 200;
+	public static final short PROTO_ID = 200;
 	
 	public static final String ADDRESS_KEY = "address";
 	public static final String PORT_KEY = "base_port";
@@ -85,7 +85,7 @@ public class BlockChainProtocol extends GenericProtocol {
 			e.printStackTrace();
 		}
 
-		registerReplyHandler(PROTO_ID, this::handleReply);
+		registerReplyHandler(Reply.REPLY_ID, this::handleReply);
 		
 		registerRequestHandler(ClientRequest.REQUEST_ID, this::handleClientRequest);
 		

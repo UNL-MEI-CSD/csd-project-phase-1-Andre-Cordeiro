@@ -6,26 +6,26 @@ import java.util.UUID;
 
 public class OpsMap {
         
-        private Map<OpsMapKey, UUID> opsMap;
+        private Map<Integer, byte[]> opsMap;
         
         public OpsMap() {
                 opsMap = new HashMap<>();
         }
         
-        public void addOp(OpsMapKey opsMapKey, UUID id) {
-                opsMap.put(opsMapKey, id);
+        public void addOp(int opsMapKeyHash, byte[] opsBlock) {
+                opsMap.put(opsMapKeyHash, opsBlock);
         }
 
-        public UUID getOp(OpsMapKey opsMapKey) {
-                return opsMap.get(opsMapKey);
+        public byte[] getOp(int opsMapKeyHash) {
+                return opsMap.get(opsMapKeyHash);
         }
 
-        public boolean containsOp(OpsMapKey opsMapKey) {
-                return opsMap.containsKey(opsMapKey);
+        public boolean containsOp(int opsMapKeyHash) {
+                return opsMap.containsKey(opsMapKeyHash);
         }
 
-        public void removeOp(OpsMapKey opsMapKey) {
-                opsMap.remove(opsMapKey);
+        public void removeOp(int opsMapKeyHash) {
+                opsMap.remove(opsMapKeyHash);
         }
 
         public void clear() {
@@ -36,7 +36,7 @@ public class OpsMap {
                 return opsMap.size();
         }
 
-        public Map<OpsMapKey, UUID> getOpsMap() {
+        public Map<Integer, byte[]> getOpsMap() {
                 return opsMap;
         }
 

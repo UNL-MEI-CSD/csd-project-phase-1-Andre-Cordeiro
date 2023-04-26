@@ -20,6 +20,7 @@ import java.util.UUID;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import blockchain.BlockChainProtocol;
 import consensus.messages.CommitMessage;
 import consensus.messages.PrePrepareMessage;
 import consensus.messages.PrepareMessage;
@@ -163,12 +164,12 @@ public class PBFTProtocol extends GenericProtocol {
 		if (currentSeqN.getNode().equals(self)){
 
 			OpsMapKey opsMapKey = new OpsMapKey(req.getTimestamp(), req.hashCode());
-			if (opsMap.containsOp(opsMapKey)){
+			if (opsMap.containsOp(opsMapKey.hashCode())){
 				logger.warn("Request received :" + req + "is a duplicate");
 				return;
 			}
 
-			int operationHash = req.hashCode();
+			int operationHash = opsMapKey.hashCode();
 			PrePrepareMessage prePrepareMsg = new PrePrepareMessage(viewNumber, currentSeqN, operationHash,cryptoName);
 
 			try {
@@ -177,7 +178,7 @@ public class PBFTProtocol extends GenericProtocol {
 					| InvalidSerializerException e) {
 				e.printStackTrace();
 			}
-			opsMap.addOp(opsMapKey, UUID.randomUUID());
+			opsMap.addOp(opsMapKey.hashCode(), req.getBlock());
 
 			view.forEach(node -> {	
 				if (!node.equals(self)){
@@ -315,8 +316,7 @@ public class PBFTProtocol extends GenericProtocol {
 				if (commitMessagesReceived == f + 1) {
 					//TODO send reply to client
 					//TODO discard requests whose timestamp is smaller than the timestamp of the last committed operation
-					Reply reply = new Reply(viewNumber, msg.getHashOpVal(), cryptoName);
-					logger.info("Sending reply to client: " + reply);
+					sendReply(new Reply(viewNumber, opsMap.getOp(msg.getHashOpVal()),cryptoName), BlockChainProtocol.PROTO_ID);
 				}
 			}
 		}

@@ -4,16 +4,18 @@ import pt.unl.fct.di.novasys.babel.generic.ProtoReply;
 
 public class Reply extends ProtoReply {
 
-    public final static short REQUEST_ID = 200;
+    public final static short REPLY_ID = 121;
 
-    private final int vN, hashOpVal;
+    private final int vN;
+    
+    private final byte[] opBlock;
 
     private final String cryptoName;
 
-    public Reply(int vN, int hashOpVal, String cryptoName) {
-        super(Reply.REQUEST_ID);
+    public Reply(int vN, byte[] opBlock, String cryptoName) {
+        super(Reply.REPLY_ID);
         this.vN = vN;
-        this.hashOpVal = hashOpVal;
+        this.opBlock = opBlock;
         this.cryptoName = cryptoName;
     }
 
@@ -21,8 +23,8 @@ public class Reply extends ProtoReply {
         return vN;
     }
 
-    public int getHashOpVal() {
-        return hashOpVal;
+    public byte[] getOpBlock() {
+        return opBlock;
     }
 
     public String getCryptoName() {
