@@ -50,4 +50,8 @@ public class RedirectClientRequestMessage extends SignedProtoMessage {
 				'}';
 	}
 
+	public ClientRequest getClientRequest() {
+		return clientRequest;
+	}
+
 }

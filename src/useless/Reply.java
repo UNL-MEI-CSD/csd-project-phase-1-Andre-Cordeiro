@@ -1,4 +1,4 @@
-package consensus.requests;
+package useless;
 
 import pt.unl.fct.di.novasys.babel.generic.ProtoReply;
 

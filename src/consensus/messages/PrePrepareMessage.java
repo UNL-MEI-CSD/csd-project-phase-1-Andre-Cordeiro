@@ -14,11 +14,13 @@ public class PrePrepareMessage extends SignedProtoMessage {
 	public final static short MESSAGE_ID = 101;
 
 	public final MessageBatchKey batchKey;
+	public final byte[] operation;
 	public final String cryptoName; //cryptoName
 	
-	public PrePrepareMessage(MessageBatchKey batchKey, String cryptoName) {  
+	public PrePrepareMessage(MessageBatchKey batchKey, byte[] block, String cryptoName) {  
 		super(PrePrepareMessage.MESSAGE_ID);
 		this.batchKey = batchKey;
+		this.operation = block;
 		this.cryptoName = cryptoName;
 	}
 
@@ -29,6 +31,7 @@ public class PrePrepareMessage extends SignedProtoMessage {
 			out.writeInt(signedProtoMessage.batchKey.getOpsHash());
 			signedProtoMessage.batchKey.getSeqN().serialize(out);
 			out.writeInt(signedProtoMessage.batchKey.getViewNumber());
+			out.writeInt(signedProtoMessage.operation.length);
 			out.writeCharSequence(signedProtoMessage.cryptoName, StandardCharsets.UTF_8);
 		}
 
@@ -37,9 +40,9 @@ public class PrePrepareMessage extends SignedProtoMessage {
 		@Override
 		public PrePrepareMessage deserializeBody(ByteBuf in) throws IOException {
 			MessageBatchKey batchKey = new MessageBatchKey(in.readInt(), SeqN.deserialize(in), in.readInt());
+			byte[] operation = new byte[in.readInt()];
 			String cryptoName = in.readCharSequence(in.readableBytes(), StandardCharsets.UTF_8).toString();
-
-			return new PrePrepareMessage(batchKey,cryptoName);
+			return new PrePrepareMessage(batchKey,operation,cryptoName);
 		}
 		
 	};
@@ -62,6 +65,10 @@ public class PrePrepareMessage extends SignedProtoMessage {
 
 	public String getCryptoName(){
 		return cryptoName;
+	}
+
+	public byte[] getOperation() {
+		return operation;
 	}
 
 }

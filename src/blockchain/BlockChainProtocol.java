@@ -24,9 +24,10 @@ import consensus.PBFTProtocol;
 import consensus.notifications.CommittedNotification;
 import consensus.notifications.ViewChange;
 import consensus.requests.ProposeRequest;
-import consensus.requests.Reply;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
+import pt.unl.fct.di.novasys.channel.tcp.MultithreadedTCPChannel;
+import pt.unl.fct.di.novasys.channel.tcp.TCPChannel;
 import pt.unl.fct.di.novasys.network.data.Host;
 import utils.Crypto;
 import utils.SignaturesHelper;
@@ -86,9 +87,7 @@ public class BlockChainProtocol extends GenericProtocol {
 			e.printStackTrace();
 		}
 
-		registerReplyHandler(Reply.REPLY_ID, this::handleReply);
-
-		
+		// registerMessageHandler(peerChannel, RedirectClientRequestMessage.MSG_ID, this::handleRedirectClientRequestMessage);
 
 		registerRequestHandler(ClientRequest.REQUEST_ID, this::handleClientRequest);
 		
@@ -155,16 +154,7 @@ public class BlockChainProtocol extends GenericProtocol {
 	
 	public void handleCommittedNotification(CommittedNotification cn, short from) {
 		//TODO: write this handler
-	}
-
-	/* ----------------------------------------------- ------------- ------------------------------------------ */
-	/* ---------------------------------------------- REPLY HANDLER ------------------------------------------- */
-	/* ----------------------------------------------- ------------- ------------------------------------------ */
-
-	public void handleReply(Reply reply, short protoID) {
-		
-		//check if the reply is valid
-		logger.info("Received a reply with id: " + reply);
+		logger.info("Received a commit notification with id: " + cn);
 	}
 	
 	/* ----------------------------------------------- ------------- ------------------------------------------ */
@@ -173,9 +163,13 @@ public class BlockChainProtocol extends GenericProtocol {
     
 	//TODO: add message handlers (and register them)
 
-	private void handleRedirectClientRequestMessage(RedirectClientRequestMessage msg, short protoID) {
+	private void handleRedirectClientRequestMessage(RedirectClientRequestMessage msg, Host from,short sourceProto, int channel) {
 
+		//handle the message like a client request
+		handleClientRequest(msg.getClientRequest(), sourceProto);
+		
 	}
+
 
 	/* ----------------------------------------------- ------------- ------------------------------------------ */
     /* ----------------------------------------------- TIMER HANDLER ------------------------------------------ */

@@ -15,7 +15,6 @@ import java.security.cert.CertificateException;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
-import java.util.UUID;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -24,9 +23,9 @@ import blockchain.BlockChainProtocol;
 import consensus.messages.CommitMessage;
 import consensus.messages.PrePrepareMessage;
 import consensus.messages.PrepareMessage;
+import consensus.notifications.CommittedNotification;
 import consensus.notifications.ViewChange;
 import consensus.requests.ProposeRequest;
-import consensus.requests.Reply;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
 import pt.unl.fct.di.novasys.babel.generic.ProtoMessage;
@@ -43,6 +42,7 @@ import pt.unl.fct.di.novasys.channel.tcp.events.OutConnectionUp;
 import pt.unl.fct.di.novasys.network.data.Host;
 import utils.Crypto;
 import utils.SeqN;
+import utils.SignaturesHelper;
 import utils.MessageBatch.MessageBatch;
 import utils.MessageBatch.MessageBatchKey;
 import utils.Operation.OpsMap;
@@ -170,7 +170,7 @@ public class PBFTProtocol extends GenericProtocol {
 			currentSeqN.increment();
 			int operationHash = opsMapKey.hashCode();
 			MessageBatchKey mbKey = new MessageBatchKey(operationHash, currentSeqN, viewNumber);
-			PrePrepareMessage prePrepareMsg = new PrePrepareMessage(mbKey,cryptoName);
+			PrePrepareMessage prePrepareMsg = new PrePrepareMessage(mbKey,req.getBlock(),cryptoName);
 
 			try {
 				prePrepareMsg.signMessage(privKey);
@@ -178,13 +178,14 @@ public class PBFTProtocol extends GenericProtocol {
 					| InvalidSerializerException e) {
 				e.printStackTrace();
 			}
-			opsMap.addOp(opsMapKey.hashCode(), req.getBlock());
+			
 
 			view.forEach(node -> {	
 				if (!node.equals(self)){
 					sendMessage(prePrepareMsg, node);
 				} else {
 					mb.addMessage(mbKey.hashCode());
+					opsMap.addOp(opsMapKey.hashCode(), req.getBlock());
 				}
 			});
 		}
@@ -220,6 +221,7 @@ public class PBFTProtocol extends GenericProtocol {
 			
 		if(checkValidMessage(msg,from)){
 			try {
+				opsMap.addOp(msg.getBatchKey().getOpsHash(), msg.getOperation());
 				mb.addMessage(msg.getBatchKey().hashCode());
 			}
 			catch (RuntimeException e){
@@ -300,7 +302,14 @@ public class PBFTProtocol extends GenericProtocol {
 			}
 			if (commitMessagesReceived == f + 1) {
 				//TODO discard requests whose timestamp is smaller than the timestamp of the last committed operation
-				sendReply(new Reply(msg.getBatchKey().getViewNumber(),opsMap.getOp(msg.getBatchKey().hashCode()),cryptoName), BlockChainProtocol.PROTO_ID);
+				byte[] block = opsMap.getOp(msg.getBatchKey().getOpsHash());
+				try {
+					CommittedNotification commitNotificationMsg = new CommittedNotification(block, SignaturesHelper.generateSignature(block, privKey));
+					triggerNotification(commitNotificationMsg);
+				} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException e) {
+					logger.error("Error signing committed notification message: " + e.getMessage());
+					e.printStackTrace();
+				}
 			}
 		}
 	}
