@@ -23,6 +23,7 @@ import consensus.PBFTProtocol;
 import consensus.notifications.CommittedNotification;
 import consensus.notifications.ViewChange;
 import consensus.requests.ProposeRequest;
+import consensus.requests.Reply;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
 import pt.unl.fct.di.novasys.network.data.Host;
@@ -83,6 +84,8 @@ public class BlockChainProtocol extends GenericProtocol {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+
+		registerReplyHandler(PROTO_ID, this::handleReply);
 		
 		registerRequestHandler(ClientRequest.REQUEST_ID, this::handleClientRequest);
 		
@@ -143,6 +146,16 @@ public class BlockChainProtocol extends GenericProtocol {
 	
 	public void handleCommittedNotification(CommittedNotification cn, short from) {
 		//TODO: write this handler
+	}
+
+	/* ----------------------------------------------- ------------- ------------------------------------------ */
+	/* ---------------------------------------------- REPLY HANDLER ------------------------------------------- */
+	/* ----------------------------------------------- ------------- ------------------------------------------ */
+
+	public void handleReply(Reply reply, short protoID) {
+		
+		//check if the reply is valid
+		logger.info("Received a reply with id: " + reply);
 	}
 	
 	/* ----------------------------------------------- ------------- ------------------------------------------ */

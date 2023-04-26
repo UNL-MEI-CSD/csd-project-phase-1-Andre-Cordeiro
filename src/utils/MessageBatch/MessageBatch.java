@@ -5,25 +5,20 @@ import java.util.Map;
 
 public class MessageBatch {
 
-    private Map<Integer, MessageCounter[]> messageBatch;
+    private Map<Integer, int[]> messageBatch;
 
     public MessageBatch() {
         this.messageBatch = new HashMap<>();
     }
 
-    
-
-    public MessageCounter[] getPrePrepareMessage(int opsHash) {
-        return this.messageBatch.get(opsHash);
-    }
 
     public boolean containsMessage(int opsHash) {
         return this.messageBatch.containsKey(opsHash);
     }
 
-    public void addPrePrepareMessage(int opsHash) {
+    public void addMessage(int opsHash) {
         if (!this.messageBatch.containsKey(opsHash)) {
-            this.messageBatch.put(opsHash, new MessageCounter[3]);
+            this.messageBatch.put(opsHash, new int[3]);
         }
         else {
             throw new RuntimeException("The opsHash should not be in the map");
@@ -31,25 +26,15 @@ public class MessageBatch {
     }
 
     public int addPrepareMessage(int opsHash) {
-        if (this.messageBatch.containsKey(opsHash)) {
-            MessageCounter[] messageCounters = this.messageBatch.get(opsHash);
-            messageCounters[1].incrementCounter();
-            return messageCounters[1].getCounter();
-        }
-        else {
-            throw new RuntimeException("The opsHash should be in the map");
-        }
+        int[] messageCounters = this.messageBatch.get(opsHash);
+        messageCounters[1]++;
+        return messageCounters[1];
     }
 
     public int addCommitMessage(int opsHash) {
-        if (this.messageBatch.containsKey(opsHash)) {
-            MessageCounter[] messageCounters = this.messageBatch.get(opsHash);
-            messageCounters[2].incrementCounter();
-            return messageCounters[2].getCounter();
-        }
-        else {
-            throw new RuntimeException("The opsHash should be in the map");
-        }
+        int[] messageCounters = this.messageBatch.get(opsHash);
+        messageCounters[2]++;
+        return messageCounters[2];
     }
 
     public void removePrePrepareMessage(int opsHash) {
@@ -60,10 +45,32 @@ public class MessageBatch {
         this.messageBatch.clear();
     }
 
+    public int size() {
+        return this.messageBatch.size();
+    }
+
+    public int[] getKeys() {
+        int[] keys = new int[this.messageBatch.size()];
+        int i = 0;
+        for (int key : this.messageBatch.keySet()) {
+            keys[i] = key;
+            i++;
+        }
+        return keys;
+    }
+
+    public  int[] getValues(int opsHash) {
+        return this.messageBatch.get(opsHash);
+    }
+
+    public Map<Integer, int[]> getMessageBatch() {
+        return messageBatch;
+    }
+
     @Override
     public String toString() {
         return "MessageBatch{" +
-                "messageBatch=" + this.messageBatch +
+                "messageBatch=" + messageBatch +
                 '}';
     }
 

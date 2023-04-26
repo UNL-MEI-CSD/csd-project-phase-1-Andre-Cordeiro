@@ -25,6 +25,7 @@ import consensus.messages.PrePrepareMessage;
 import consensus.messages.PrepareMessage;
 import consensus.notifications.ViewChange;
 import consensus.requests.ProposeRequest;
+import consensus.requests.Reply;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
 import pt.unl.fct.di.novasys.babel.generic.ProtoMessage;
@@ -181,6 +182,8 @@ public class PBFTProtocol extends GenericProtocol {
 			view.forEach(node -> {	
 				if (!node.equals(self)){
 					sendMessage(prePrepareMsg, node);
+				} else {
+					mb.addMessage(operationHash);
 				}
 			});
 		}
@@ -213,16 +216,13 @@ public class PBFTProtocol extends GenericProtocol {
     }
 
 	private void uponPrePrepareMessage(PrePrepareMessage msg, Host from, short sourceProto, int channel){
-		
-		logger.info("Received pre-prepare message: " + msg );
 
 		if (msg.getViewNumber() == viewNumber){
 			
 			if(checkValidMessage(msg,from)){
 				try {
-					mb.addPrePrepareMessage(msg.getOp());
-					logger.info("Added pre-prepare message to batch: " + msg);
-				} 
+					mb.addMessage(msg.getOp());
+				}
 				catch (RuntimeException e){
 					logger.warn("Received a duplicate pre-prepare message: " + msg);
 					return;
@@ -240,9 +240,10 @@ public class PBFTProtocol extends GenericProtocol {
 				view.forEach(node -> {
 					if (!node.equals(self)){
 						sendMessage(prepareMsg, node);
+					} else {
+						mb.addPrepareMessage(msg.getOp());
 					}
 				});
-
 			}
 
 		} else {
@@ -260,13 +261,18 @@ public class PBFTProtocol extends GenericProtocol {
 
 					int prepareMessagesReceived = 0;
 					try {
-						prepareMessagesReceived = mb.addPrepareMessage(msg.getHashOpVal());
+						if (mb.containsMessage(msg.getHashOpVal())) {
+							prepareMessagesReceived = mb.addPrepareMessage(msg.getHashOpVal());
+						}
+						else {
+							logger.warn("Received a prepare message for an unknown operation: " + msg);
+							return;
+						}
 					} catch (RuntimeException e){
-						logger.warn("Received a unknown prepare message: " + msg + mb.getPrePrepareMessage(msg.getHashOpVal()));
+						logger.warn("Received a unknown prepare message: " + msg + mb.getValues(msg.getHashOpVal()));
 						return;
 					}
 					if (prepareMessagesReceived == 2 * f + 1) {
-						logger.info("Sending commit message to all nodes");
 						CommitMessage commitMsg = new CommitMessage(viewNumber, currentSeqN, msg.getHashOpVal(), 0, cryptoName);
 						try {
 							commitMsg.signMessage(privKey);
@@ -274,7 +280,11 @@ public class PBFTProtocol extends GenericProtocol {
 								| InvalidSerializerException e) {
 							e.printStackTrace();
 						}
-						sendMessage(commitMsg, from);
+						view.forEach(node -> {
+							if (!node.equals(self)){
+								sendMessage(commitMsg, node);
+							}
+						});
 					}
 				}
 			} else {
@@ -286,11 +296,28 @@ public class PBFTProtocol extends GenericProtocol {
 	}
 
 	private void uponCommitMessage(CommitMessage msg, Host from, short sourceProto, int channel){
+		
 		if (msg.getViewNumber() == viewNumber) {
 			if (msg.getSequenceNumber().equals(currentSeqN) && checkValidMessage(msg, from)) {
-				//TODO and message to msg log
-				// TODO send reply to client
-				// TODO discard requests whose timestamp is smaller than the timestamp of the last committed operation
+				int commitMessagesReceived = 0;
+				try {
+					if (mb.containsMessage(msg.getHashOpVal())) {
+						commitMessagesReceived = mb.addCommitMessage(msg.getHashOpVal());
+					}
+					else {
+						logger.warn("Received a commit message for an unknown operation: " + msg);
+						return;
+					}
+				} catch (RuntimeException e){
+					logger.warn("Received a unknown commit message: " + msg + mb.getValues(msg.getHashOpVal()));
+					return;
+				}
+				if (commitMessagesReceived == f + 1) {
+					//TODO send reply to client
+					//TODO discard requests whose timestamp is smaller than the timestamp of the last committed operation
+					Reply reply = new Reply(viewNumber, msg.getHashOpVal(), cryptoName);
+					logger.info("Sending reply to client: " + reply);
+				}
 			}
 		}
 	}
