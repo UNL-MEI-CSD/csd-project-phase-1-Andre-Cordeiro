@@ -35,7 +35,7 @@ public class ClientRequest extends ProtoRequest {
 		return operation;
 	}
 	
-	static ClientRequest fromBytes(byte[] b) {
+	public static ClientRequest fromBytes(byte[] b) {
 		ByteBuf bb = Unpooled.wrappedBuffer(b);
 		UUID id = new UUID(bb.readLong(), bb.readLong());
 		short s = bb.readShort();

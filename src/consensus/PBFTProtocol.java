@@ -299,7 +299,6 @@ public class PBFTProtocol extends GenericProtocol {
 				return;
 			}
 			if (commitMessagesReceived == f + 1) {
-				//TODO send reply to client
 				//TODO discard requests whose timestamp is smaller than the timestamp of the last committed operation
 				sendReply(new Reply(msg.getBatchKey().getViewNumber(),opsMap.getOp(msg.getBatchKey().hashCode()),cryptoName), BlockChainProtocol.PROTO_ID);
 			}

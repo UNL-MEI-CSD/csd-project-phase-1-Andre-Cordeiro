@@ -16,6 +16,7 @@ import java.util.Properties;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import blockchain.messages.RedirectClientRequestMessage;
 import blockchain.requests.ClientRequest;
 import blockchain.timers.CheckUnhandledRequestsPeriodicTimer;
 import blockchain.timers.LeaderSuspectTimer;
@@ -86,7 +87,9 @@ public class BlockChainProtocol extends GenericProtocol {
 		}
 
 		registerReplyHandler(Reply.REPLY_ID, this::handleReply);
+
 		
+
 		registerRequestHandler(ClientRequest.REQUEST_ID, this::handleClientRequest);
 		
 		registerTimerHandler(CheckUnhandledRequestsPeriodicTimer.TIMER_ID, this::handleCheckUnhandledRequestsPeriodicTimer);
@@ -122,6 +125,12 @@ public class BlockChainProtocol extends GenericProtocol {
 			}
 		} else {
 			//TODO: Redirect this request to the leader via a specialized message
+			RedirectClientRequestMessage msg = new RedirectClientRequestMessage(req);
+			try {
+				sendMessage(msg, this.view.get(0), PBFTProtocol.PROTO_ID);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
 		}
 	}
 	
@@ -163,6 +172,10 @@ public class BlockChainProtocol extends GenericProtocol {
     /* ----------------------------------------------- ------------- ------------------------------------------ */
     
 	//TODO: add message handlers (and register them)
+
+	private void handleRedirectClientRequestMessage(RedirectClientRequestMessage msg, short protoID) {
+
+	}
 
 	/* ----------------------------------------------- ------------- ------------------------------------------ */
     /* ----------------------------------------------- TIMER HANDLER ------------------------------------------ */
