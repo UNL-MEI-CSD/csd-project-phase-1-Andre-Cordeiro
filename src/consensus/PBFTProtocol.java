@@ -19,11 +19,11 @@ import java.util.Properties;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import blockchain.BlockChainProtocol;
 import consensus.messages.CommitMessage;
 import consensus.messages.PrePrepareMessage;
 import consensus.messages.PrepareMessage;
 import consensus.notifications.CommittedNotification;
+import consensus.notifications.InitialNotification;
 import consensus.notifications.ViewChange;
 import consensus.requests.ProposeRequest;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
@@ -147,6 +147,8 @@ public class PBFTProtocol extends GenericProtocol {
 		
 		// TODO: Open connections to all nodes in the (initial) view
 		view.forEach(this::openConnection);
+
+		triggerNotification(new InitialNotification(self, peerChannel));
 		
 		//Installing first view
 		triggerNotification(new ViewChange(view, viewNumber));

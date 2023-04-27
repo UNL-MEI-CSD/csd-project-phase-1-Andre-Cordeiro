@@ -1,7 +1,6 @@
 package blockchain;
 
 import java.io.IOException;
-import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -16,18 +15,17 @@ import java.util.Properties;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import blockchain.messages.RedirectClientRequestMessage;
 import blockchain.requests.ClientRequest;
+import blockchain.requests.RedirectClientRequest;
 import blockchain.timers.CheckUnhandledRequestsPeriodicTimer;
 import blockchain.timers.LeaderSuspectTimer;
 import consensus.PBFTProtocol;
 import consensus.notifications.CommittedNotification;
+import consensus.notifications.InitialNotification;
 import consensus.notifications.ViewChange;
 import consensus.requests.ProposeRequest;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
-import pt.unl.fct.di.novasys.channel.tcp.MultithreadedTCPChannel;
-import pt.unl.fct.di.novasys.channel.tcp.TCPChannel;
 import pt.unl.fct.di.novasys.network.data.Host;
 import utils.Crypto;
 import utils.SignaturesHelper;
@@ -64,8 +62,8 @@ public class BlockChainProtocol extends GenericProtocol {
 		//Probably the following informations could be provided by a notification
 		//emitted by the PBFTProtocol
 		//(this should not be interpreted as the unique or canonical solution)
-		self = new Host(InetAddress.getByName(props.getProperty(ADDRESS_KEY)),
-				Integer.parseInt(props.getProperty(PORT_KEY)));
+		// self = new Host(InetAddress.getByName(props.getProperty(ADDRESS_KEY)),
+		// 		Integer.parseInt(props.getProperty(PORT_KEY)));
 		
 		viewNumber = 0;
 		view = new LinkedList<>();
@@ -90,12 +88,14 @@ public class BlockChainProtocol extends GenericProtocol {
 		// registerMessageHandler(peerChannel, RedirectClientRequestMessage.MSG_ID, this::handleRedirectClientRequestMessage);
 
 		registerRequestHandler(ClientRequest.REQUEST_ID, this::handleClientRequest);
+		registerRequestHandler(RedirectClientRequest.REQUEST_ID, this::handleRedirectClientRequest);
 		
 		registerTimerHandler(CheckUnhandledRequestsPeriodicTimer.TIMER_ID, this::handleCheckUnhandledRequestsPeriodicTimer);
 		registerTimerHandler(LeaderSuspectTimer.TIMER_ID, this::handleLeaderSuspectTimer);
 		
 		subscribeNotification(ViewChange.NOTIFICATION_ID, this::handleViewChangeNotification);
 		subscribeNotification(CommittedNotification.NOTIFICATION_ID, this::handleCommittedNotification);
+		subscribeNotification(InitialNotification.NOTIFICATION_ID, this::handleInitialNotification);
 		
 		setupPeriodicTimer(new CheckUnhandledRequestsPeriodicTimer(), checkRequestsPeriod, checkRequestsPeriod);
 	}
@@ -124,13 +124,33 @@ public class BlockChainProtocol extends GenericProtocol {
 			}
 		} else {
 			//TODO: Redirect this request to the leader via a specialized message
-			RedirectClientRequestMessage msg = new RedirectClientRequestMessage(req);
+			RedirectClientRequest request = new RedirectClientRequest(req);
 			try {
-				sendMessage(msg, this.view.get(0), PBFTProtocol.PROTO_ID);
+				sendRequest(request, BlockChainProtocol.PROTO_ID);
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
 		}
+	}
+
+	private void handleRedirectClientRequest(RedirectClientRequest req, short ProtoID) {
+
+		if(this.leader) {
+			
+			try {
+				//TODO: This is a super over simplification we will handle latter
+				//Only one block should be submitted for agreement at a time
+				//Also this assumes that a block only contains a single client request
+				byte[] request = req.getClientRequest().generateByteRepresentation();
+				byte[] signature = SignaturesHelper.generateSignature(request, this.key);
+				
+				sendRequest(new ProposeRequest(request, signature), PBFTProtocol.PROTO_ID);
+			} catch (Exception e) {
+				e.printStackTrace();
+				System.exit(1); //Catastrophic failure!!!
+			}
+		}
+		
 	}
 	
 	/* ----------------------------------------------- ------------- ------------------------------------------ */
@@ -148,7 +168,7 @@ public class BlockChainProtocol extends GenericProtocol {
 			this.view.add(vc.getView().get(i));
 		}
 		//TODO: Compute correctly who is the leader and not assume that you are always the leader.
-		this.leader = true;
+		this.leader = (this.view.get(0).equals(self));
 		
 	}
 	
@@ -156,19 +176,20 @@ public class BlockChainProtocol extends GenericProtocol {
 		//TODO: write this handler
 		logger.info("Received a commit notification with id: " + cn);
 	}
-	
+
+	public void handleInitialNotification(InitialNotification in, short from) {
+		
+		this.self = in.getSelf();
+
+
+
+	}
+		
 	/* ----------------------------------------------- ------------- ------------------------------------------ */
     /* ---------------------------------------------- MESSAGE HANDLER ----------------------------------------- */
     /* ----------------------------------------------- ------------- ------------------------------------------ */
     
 	//TODO: add message handlers (and register them)
-
-	private void handleRedirectClientRequestMessage(RedirectClientRequestMessage msg, Host from,short sourceProto, int channel) {
-
-		//handle the message like a client request
-		handleClientRequest(msg.getClientRequest(), sourceProto);
-		
-	}
 
 
 	/* ----------------------------------------------- ------------- ------------------------------------------ */
