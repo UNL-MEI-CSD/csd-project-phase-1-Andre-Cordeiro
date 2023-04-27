@@ -67,13 +67,14 @@ public class PBFTProtocol extends GenericProtocol {
 
 	//Leadership
 	private SeqN currentSeqN;
+	private SeqN highestSeqN;
 	
 	//TODO: add protocol state (related with the internal operation of the view)
 	private Host self;
 	private int viewNumber;
 	private final List<Host> view;
 	private OpsMap opsMap;
-	private int f;
+	private int failureNumber;
 	private MessageBatch mb;
 
 	
@@ -93,8 +94,11 @@ public class PBFTProtocol extends GenericProtocol {
 			String[] tokens = s.split(":");
 			view.add(new Host(InetAddress.getByName(tokens[0]), Integer.parseInt(tokens[1])));
 		}
-		f = (view.size() - 1) / 3;
+
+		failureNumber = (view.size() - 1) / 3;
+
 		currentSeqN = new SeqN(0, view.get(0));
+		highestSeqN = currentSeqN;
 
 		mb = new MessageBatch();
 		
@@ -156,7 +160,7 @@ public class PBFTProtocol extends GenericProtocol {
 	
 	//TODO: Add event (messages, requests, timers, notifications) handlers of the protocol
 	
-	/* --------------------------------------- Connection Manager Functions ----------------------------------- */
+	/* --------------------------------------- Propose Request Handler ----------------------------------- */
 	
     private void uponProposeRequest(ProposeRequest req, int channel) {
 		logger.info("Received propose request: " + req);
@@ -169,7 +173,7 @@ public class PBFTProtocol extends GenericProtocol {
 				return;
 			}
 
-			currentSeqN.increment();
+			currentSeqN = new SeqN(currentSeqN.getCounter()+1, self);
 			int operationHash = opsMapKey.hashCode();
 			MessageBatchKey mbKey = new MessageBatchKey(operationHash, currentSeqN, viewNumber);
 			PrePrepareMessage prePrepareMsg = new PrePrepareMessage(mbKey,req.getBlock(),cryptoName);
@@ -197,6 +201,8 @@ public class PBFTProtocol extends GenericProtocol {
 
 
 	}
+
+	// ---------------------- Connection Manager Handlers -----------------------------
 	
 	private void uponOutConnectionUp(OutConnectionUp event, int channel) {
         logger.info(event);
@@ -218,6 +224,8 @@ public class PBFTProtocol extends GenericProtocol {
     private void uponInConnectionDown(InConnectionDown event, int channel) {
         logger.warn(event);
     }
+
+	// ---------------------- PrePrepare Message Handlers -----------------------------
 
 	private void uponPrePrepareMessage(PrePrepareMessage msg, Host from, short sourceProto, int channel){
 			
@@ -250,6 +258,8 @@ public class PBFTProtocol extends GenericProtocol {
 		}
 	}
 
+	// --------------------------- Prepare Message ---------------------------
+
 	private void uponPrepareMessage(PrepareMessage msg, Host from, short sourceProto, int channel){
 	
 		if (checkValidMessage(msg,from)){
@@ -268,7 +278,7 @@ public class PBFTProtocol extends GenericProtocol {
 				logger.warn("Received a unknown prepare message: " + msg + mb.getValues(msg.getBatchKey().hashCode()));
 				return;
 			}
-			if (prepareMessagesReceived == 2 * f + 1) {
+			if (prepareMessagesReceived == 2 * failureNumber + 1) {
 				CommitMessage commitMsg = new CommitMessage(msg.getBatchKey(), 0, cryptoName);
 				try {
 					commitMsg.signMessage(privKey);
@@ -285,9 +295,19 @@ public class PBFTProtocol extends GenericProtocol {
 		}
 	}
 
+	// -----------------------Commit Message -----------------------------
+
 	private void uponCommitMessage(CommitMessage msg, Host from, short sourceProto, int channel){
 
 		if (checkValidMessage(msg, from)) {
+
+			if (currentSeqN.lesserThan(highestSeqN)) {
+				logger.warn("Received a commit message for a lower sequence number: " + msg);
+				return;
+			} else if (currentSeqN.greaterThan(highestSeqN)) {
+				newHighestSeqN();
+			}
+			
 			int commitMessagesReceived = 0;
 			try {
 				int hash = msg.getBatchKey().hashCode();
@@ -302,7 +322,7 @@ public class PBFTProtocol extends GenericProtocol {
 				logger.warn("Received a unknown commit message: " + msg + mb.getValues(msg.getBatchKey().hashCode()));
 				return;
 			}
-			if (commitMessagesReceived == f + 1) {
+			if (commitMessagesReceived == failureNumber + 1) {
 				//TODO discard requests whose timestamp is smaller than the timestamp of the last committed operation
 				byte[] block = opsMap.getOp(msg.getBatchKey().getOpsHash());
 				try {
@@ -316,10 +336,14 @@ public class PBFTProtocol extends GenericProtocol {
 		}
 	}
 
+	// ------------------------- Failure handling ------------------------- //
+
 	private void uponMessageFailed(ProtoMessage msg, Host from, short sourceProto, int channel){
 		logger.warn("Failed to deliver message " + msg + " from " + from);
 	}
 
+
+	// ------------------------- Validation functions ------------------------- //
 
 	private boolean checkValidMessage(Object msgObj,Host from){
 		boolean check;
@@ -359,6 +383,12 @@ public class PBFTProtocol extends GenericProtocol {
 			throw new IllegalArgumentException("Message is not valid");
 		}
 		return check;
+	}
+
+	// ------------------------- Auxiliary functions ------------------------- //
+
+	private void newHighestSeqN(){
+		highestSeqN = new SeqN(currentSeqN.getCounter(), currentSeqN.getNode());
 	}
 		
 }
