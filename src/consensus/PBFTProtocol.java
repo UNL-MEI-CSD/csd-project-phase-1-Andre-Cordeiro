@@ -26,6 +26,9 @@ import consensus.notifications.CommittedNotification;
 import consensus.notifications.InitialNotification;
 import consensus.notifications.ViewChange;
 import consensus.requests.ProposeRequest;
+import consensus.timers.LeaderTimer;
+import consensus.timers.NoOpTimer;
+import consensus.timers.ReconnectTimer;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
 import pt.unl.fct.di.novasys.babel.generic.ProtoMessage;
@@ -58,8 +61,20 @@ public class PBFTProtocol extends GenericProtocol {
 	public static final String PORT_KEY = "base_port";
 	public static final String INITIAL_MEMBERSHIP_KEY = "initial_membership";
 
+	public static final String RECONNECT_TIME_KEY = "reconnect_time";
+	public static final String LEADER_TIMEOUT_KEY = "leader_timeout";
+
 	private static final Logger logger = LogManager.getLogger(PBFTProtocol.class);
-	
+
+	// Timers
+	private final int RECONNECT_TIME;
+	private final int LEADER_TIMEOUT;
+	private final int NOOP_SEND_INTERVAL;
+
+	private long noOpTimer;
+    private long lastLeaderOp;
+
+	// Crypto
 	private String cryptoName;
 	private KeyStore truststore;
 	private PrivateKey privKey;
@@ -69,7 +84,6 @@ public class PBFTProtocol extends GenericProtocol {
 	private SeqN currentSeqN;
 	private SeqN highestSeqN;
 	
-	//TODO: add protocol state (related with the internal operation of the view)
 	private Host self;
 	private int viewNumber;
 	private final List<Host> view;
@@ -77,12 +91,18 @@ public class PBFTProtocol extends GenericProtocol {
 	private int failureNumber;
 	private MessageBatch mb;
 
+
+
 	
 	public PBFTProtocol(Properties props) throws NumberFormatException, UnknownHostException {
 		super(PBFTProtocol.PROTO_NAME, PBFTProtocol.PROTO_ID);
 
 		self = new Host(InetAddress.getByName(props.getProperty(ADDRESS_KEY)),
 				Integer.parseInt(props.getProperty(PORT_KEY)));
+
+		this.RECONNECT_TIME = Integer.parseInt(props.getProperty(RECONNECT_TIME_KEY));
+		this.LEADER_TIMEOUT = Integer.parseInt(props.getProperty(LEADER_TIMEOUT_KEY));
+		this.NOOP_SEND_INTERVAL = LEADER_TIMEOUT / 2;
 		
 		viewNumber = 1;
 		
@@ -122,8 +142,8 @@ public class PBFTProtocol extends GenericProtocol {
 		peerProps.setProperty(TCPChannel.PORT_KEY, props.getProperty(PORT_KEY));
 		int peerChannel = createChannel(TCPChannel.NAME, peerProps);
 		
-		// TODO: Must add handlers for requests and messages and register message serializers
 		
+		// Connection Events Handlers
 		registerChannelEventHandler(peerChannel, InConnectionDown.EVENT_ID, this::uponInConnectionDown);
         registerChannelEventHandler(peerChannel, InConnectionUp.EVENT_ID, this::uponInConnectionUp);
         registerChannelEventHandler(peerChannel, OutConnectionDown.EVENT_ID, this::uponOutConnectionDown);
@@ -144,6 +164,11 @@ public class PBFTProtocol extends GenericProtocol {
 		registerMessageSerializer(peerChannel, PrepareMessage.MESSAGE_ID, PrepareMessage.serializer);
 		registerMessageSerializer(peerChannel, CommitMessage.MESSAGE_ID, CommitMessage.serializer);
 
+		// Timer Handlers
+		registerTimerHandler(LeaderTimer.TIMER_ID, this::onLeaderTimer);
+        registerTimerHandler(NoOpTimer.TIMER_ID, this::onNoOpTimer);
+        registerTimerHandler(ReconnectTimer.TIMER_ID, this::onReconnectTimer);
+
 
 		logger.info("Standing by to extablish connections (10s)");
 		
@@ -151,14 +176,66 @@ public class PBFTProtocol extends GenericProtocol {
 		
 		// TODO: Open connections to all nodes in the (initial) view
 		view.forEach(this::openConnection);
+		setupPeriodicTimer(LeaderTimer.instance, LEADER_TIMEOUT, LEADER_TIMEOUT / 3);
+        lastLeaderOp = System.currentTimeMillis();
 
 		triggerNotification(new InitialNotification(self, peerChannel));
 		
 		//Installing first view
 		triggerNotification(new ViewChange(view, viewNumber));
 	}
+
+	/* --------------------------------------- Timer Handlers ----------------------------------- */
+
+	private void onLeaderTimer(LeaderTimer timer, long timerId) {
+        if (!currentSeqN.getNode().equals(self) && (System.currentTimeMillis() - lastLeaderOp > LEADER_TIMEOUT))
+            logger.info("Leader timeout expired. Triggering view change.");
+    }
+
+	private void onNoOpTimer(NoOpTimer timer, long timerId) {
+		if (currentSeqN.getNode().equals(self)) {
+			logger.warn("Sending NOOP");
+			noOpTimer = setupPeriodicTimer(NoOpTimer.instance, NOOP_SEND_INTERVAL, NOOP_SEND_INTERVAL);
+		}
+	}
+
+	private void onReconnectTimer(ReconnectTimer timer, long timerId) {
+		openConnection(timer.getHost());
+	}
+
+
+	// --------------------------------------- View Change Handlers -----------------------------------
+
+	private void suspectLeader() {
+
+	}
 	
-	//TODO: Add event (messages, requests, timers, notifications) handlers of the protocol
+
+	// --------------------------------------- Connection Manager Handlers -----------------------------
+	
+	private void uponOutConnectionUp(OutConnectionUp event, int channel) {
+        logger.info(event);
+    }
+
+    private void uponOutConnectionDown(OutConnectionDown event, int channel) {
+        logger.warn(event);
+		setupTimer(new ReconnectTimer(event.getNode()), RECONNECT_TIME);
+    }
+
+    private void uponOutConnectionFailed(OutConnectionFailed<ProtoMessage> ev, int ch) {
+    	logger.warn(ev); 
+    	setupTimer(new ReconnectTimer(ev.getNode()), RECONNECT_TIME);
+    }
+
+    private void uponInConnectionUp(InConnectionUp event, int channel) {
+        logger.info(event);
+    }
+
+    private void uponInConnectionDown(InConnectionDown event, int channel) {
+        logger.warn(event);
+    }
+
+
 	
 	/* --------------------------------------- Propose Request Handler ----------------------------------- */
 	
@@ -201,29 +278,6 @@ public class PBFTProtocol extends GenericProtocol {
 
 
 	}
-
-	// ---------------------- Connection Manager Handlers -----------------------------
-	
-	private void uponOutConnectionUp(OutConnectionUp event, int channel) {
-        logger.info(event);
-    }
-
-    private void uponOutConnectionDown(OutConnectionDown event, int channel) {
-        logger.warn(event);
-    }
-
-    private void uponOutConnectionFailed(OutConnectionFailed<ProtoMessage> ev, int ch) {
-    	logger.warn(ev); 
-    	openConnection(ev.getNode());
-    }
-
-    private void uponInConnectionUp(InConnectionUp event, int channel) {
-        logger.info(event);
-    }
-
-    private void uponInConnectionDown(InConnectionDown event, int channel) {
-        logger.warn(event);
-    }
 
 	// ---------------------- PrePrepare Message Handlers -----------------------------
 
@@ -323,11 +377,13 @@ public class PBFTProtocol extends GenericProtocol {
 				return;
 			}
 			if (commitMessagesReceived == failureNumber + 1) {
-				//TODO discard requests whose timestamp is smaller than the timestamp of the last committed operation
 				byte[] block = opsMap.getOp(msg.getBatchKey().getOpsHash());
 				try {
+					cancelTimer(noOpTimer);
 					CommittedNotification commitNotificationMsg = new CommittedNotification(block, SignaturesHelper.generateSignature(block, privKey));
+					//TODO: make the send of the op only if the previous is done else put it in a stack.
 					triggerNotification(commitNotificationMsg);
+                    noOpTimer = setupTimer(NoOpTimer.instance, NOOP_SEND_INTERVAL);
 				} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException e) {
 					logger.error("Error signing committed notification message: " + e.getMessage());
 					e.printStackTrace();
@@ -384,6 +440,7 @@ public class PBFTProtocol extends GenericProtocol {
 		}
 		return check;
 	}
+
 
 	// ------------------------- Auxiliary functions ------------------------- //
 
