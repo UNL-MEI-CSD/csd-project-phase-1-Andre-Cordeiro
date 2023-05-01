@@ -479,8 +479,8 @@ public class PBFTProtocol extends GenericProtocol {
 				isInViewChange = true;
 				numberOfViewChangesMessagesReceived++;
 				if (numberOfViewChangesMessagesReceived == 2 * failureNumber) {
-					logger.info("Received enough view change messages to start a view change");				
-				
+					logger.info("Received enough view change messages to start a view change");	
+				}			
 			}
 		}
 	}
