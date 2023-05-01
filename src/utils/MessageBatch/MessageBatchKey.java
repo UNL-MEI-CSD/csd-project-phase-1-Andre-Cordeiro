@@ -29,4 +29,13 @@ public class MessageBatchKey {
     public int hashCode() {
         return opsHash + seqN.hashCode() + viewNumber;
     }
+
+    @Override
+    public String toString() {
+        return "MessageBatchKey{" +
+                "opsHash=" + opsHash +
+                ", seqN=" + seqN +
+                ", viewNumber=" + viewNumber +
+                '}';
+    }
 }

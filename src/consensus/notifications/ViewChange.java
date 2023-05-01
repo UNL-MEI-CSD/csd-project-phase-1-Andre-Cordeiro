@@ -1,37 +1,31 @@
 package consensus.notifications;
 
-import java.util.LinkedList;
 import java.util.List;
 
 import pt.unl.fct.di.novasys.babel.generic.ProtoNotification;
 import pt.unl.fct.di.novasys.network.data.Host;
+import utils.View;
 
 public class ViewChange extends ProtoNotification {
 	
 	public final static short NOTIFICATION_ID = 102;
 	
-	private final List<Host> view;
-	private final int viewNumber;
+	private final View view;
 	
 	
-	public ViewChange(List<Host> view, int viewNumber) {
+	public ViewChange(View view) {
 		super(ViewChange.NOTIFICATION_ID);
-		this.view = new LinkedList<Host>();
-		for(int i = 0; i < view.size(); i++) {
-			this.view.add(view.get(i));
-		}
-		
-		this.viewNumber = viewNumber;
+		this.view = view;
 	}
 
 
 	public List<Host> getView() {
-		return view;
+		return view.getView();
 	}
 
 
 	public int getViewNumber() {
-		return viewNumber;
+		return view.getViewNumber();
 	}
 
 	

@@ -106,11 +106,11 @@ public class BlockChainProtocol extends GenericProtocol {
     /* ----------------------------------------------- ------------- ------------------------------------------ */
     
 	public void handleClientRequest(ClientRequest req, short protoID) {
-		logger.info("Received a ClientRequeest with id: " + req.getRequestId());
 		
 		if(this.leader) {
 			
 			try {
+			logger.info("Received a ClientRequeest with id: " + req.getRequestId());	
 				//TODO: This is a super over simplification we will handle latter
 				//Only one block should be submitted for agreement at a time
 				//Also this assumes that a block only contains a single client request
@@ -127,6 +127,7 @@ public class BlockChainProtocol extends GenericProtocol {
 			RedirectClientRequest request = new RedirectClientRequest(req);
 			try {
 				sendRequest(request, BlockChainProtocol.PROTO_ID);
+				logger.info("Redirected a ClientRequeest with id: " + req.getRequestId() + " to the leader");
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
@@ -138,6 +139,7 @@ public class BlockChainProtocol extends GenericProtocol {
 		if(this.leader) {
 			
 			try {
+				logger.info("Received a ClientRequeest with id: " + req.getClientRequest().getRequestId());
 				//TODO: This is a super over simplification we will handle latter
 				//Only one block should be submitted for agreement at a time
 				//Also this assumes that a block only contains a single client request
@@ -174,14 +176,12 @@ public class BlockChainProtocol extends GenericProtocol {
 	
 	public void handleCommittedNotification(CommittedNotification cn, short from) {
 		//TODO: write this handler
-		logger.info("Received a commit notification with id: " + cn);
+		logger.info("Received a commit notification with id: " + cn + " from: " + from);
 	}
 
 	public void handleInitialNotification(InitialNotification in, short from) {
-		
+
 		this.self = in.getSelf();
-
-
 
 	}
 		

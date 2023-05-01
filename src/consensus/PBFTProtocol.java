@@ -22,6 +22,7 @@ import org.apache.logging.log4j.Logger;
 import consensus.messages.CommitMessage;
 import consensus.messages.PrePrepareMessage;
 import consensus.messages.PrepareMessage;
+import consensus.messages.ViewChangeMessage;
 import consensus.notifications.CommittedNotification;
 import consensus.notifications.InitialNotification;
 import consensus.notifications.ViewChange;
@@ -46,6 +47,7 @@ import pt.unl.fct.di.novasys.network.data.Host;
 import utils.Crypto;
 import utils.SeqN;
 import utils.SignaturesHelper;
+import utils.View;
 import utils.MessageBatch.MessageBatch;
 import utils.MessageBatch.MessageBatchKey;
 import utils.Operation.OpsMap;
@@ -84,14 +86,16 @@ public class PBFTProtocol extends GenericProtocol {
 	private SeqN currentSeqN;
 	private SeqN highestSeqN;
 	
+	//View
 	private Host self;
-	private int viewNumber;
-	private final List<Host> view;
-	private OpsMap opsMap;
+	private View view;
 	private int failureNumber;
+	private boolean isInViewChange;
+	private int numberOfViewChangesMessagesReceived;
+
+	//State
+	private OpsMap opsMap;
 	private MessageBatch mb;
-
-
 
 	
 	public PBFTProtocol(Properties props) throws NumberFormatException, UnknownHostException {
@@ -104,20 +108,20 @@ public class PBFTProtocol extends GenericProtocol {
 		this.LEADER_TIMEOUT = Integer.parseInt(props.getProperty(LEADER_TIMEOUT_KEY));
 		this.NOOP_SEND_INTERVAL = LEADER_TIMEOUT / 2;
 		
-		viewNumber = 1;
 		
 		opsMap = new OpsMap();
-		
-		view = new LinkedList<>();
+		this.view = new View(1);
 		String[] membership = props.getProperty(INITIAL_MEMBERSHIP_KEY).split(",");
 		for (String s : membership) {
 			String[] tokens = s.split(":");
-			view.add(new Host(InetAddress.getByName(tokens[0]), Integer.parseInt(tokens[1])));
+			this.view.addMember(new Host(InetAddress.getByName(tokens[0]), Integer.parseInt(tokens[1])));
 		}
+
+		view.setLeader(view.getView().get(0));
 
 		failureNumber = (view.size() - 1) / 3;
 
-		currentSeqN = new SeqN(0, view.get(0));
+		currentSeqN = new SeqN(0, view.getLeader());
 		highestSeqN = currentSeqN;
 
 		mb = new MessageBatch();
@@ -158,11 +162,13 @@ public class PBFTProtocol extends GenericProtocol {
 		registerMessageHandler(peerChannel, PrePrepareMessage.MESSAGE_ID, this::uponPrePrepareMessage, this::uponMessageFailed);
         registerMessageHandler(peerChannel, PrepareMessage.MESSAGE_ID, this::uponPrepareMessage, this::uponMessageFailed);
 		registerMessageHandler(peerChannel, CommitMessage.MESSAGE_ID, this::uponCommitMessage, this::uponMessageFailed);
+		registerMessageHandler(peerChannel, ViewChangeMessage.MESSAGE_ID, this::uponViewChangeMessage, this::uponMessageFailed);
 
 		// Message Serializers
 		registerMessageSerializer(peerChannel, PrePrepareMessage.MESSAGE_ID, PrePrepareMessage.serializer);
 		registerMessageSerializer(peerChannel, PrepareMessage.MESSAGE_ID, PrepareMessage.serializer);
 		registerMessageSerializer(peerChannel, CommitMessage.MESSAGE_ID, CommitMessage.serializer);
+		registerMessageSerializer(peerChannel, ViewChangeMessage.MESSAGE_ID, ViewChangeMessage.serializer);
 
 		// Timer Handlers
 		registerTimerHandler(LeaderTimer.TIMER_ID, this::onLeaderTimer);
@@ -175,21 +181,23 @@ public class PBFTProtocol extends GenericProtocol {
 		try { Thread.sleep(10 * 1000); } catch (InterruptedException e) { }
 		
 		// TODO: Open connections to all nodes in the (initial) view
-		view.forEach(this::openConnection);
+		view.getView().forEach(this::openConnection);
 		setupPeriodicTimer(LeaderTimer.instance, LEADER_TIMEOUT, LEADER_TIMEOUT / 3);
         lastLeaderOp = System.currentTimeMillis();
 
 		triggerNotification(new InitialNotification(self, peerChannel));
 		
 		//Installing first view
-		triggerNotification(new ViewChange(view, viewNumber));
+		triggerNotification(new ViewChange(view));
 	}
 
 	/* --------------------------------------- Timer Handlers ----------------------------------- */
 
 	private void onLeaderTimer(LeaderTimer timer, long timerId) {
-        if (!currentSeqN.getNode().equals(self) && (System.currentTimeMillis() - lastLeaderOp > LEADER_TIMEOUT))
-            logger.info("Leader timeout expired. Triggering view change.");
+        if (!view.isLeader(self) && (System.currentTimeMillis() - lastLeaderOp > LEADER_TIMEOUT)){
+            logger.error("Leader timeout expired. Triggering view change.");
+			startViewChange();
+		}
     }
 
 	private void onNoOpTimer(NoOpTimer timer, long timerId) {
@@ -205,11 +213,21 @@ public class PBFTProtocol extends GenericProtocol {
 
 
 	// --------------------------------------- View Change Handlers -----------------------------------
-
-	private void suspectLeader() {
-
-	}
 	
+	private void startViewChange() {
+		logger.info("Starting view change");
+		isInViewChange = true;
+		view.incrementViewNumber();
+		
+		ViewChangeMessage vcm = new ViewChangeMessage(view.getViewNumber(), currentSeqN.getCounter(), self.getPort(), cryptoName);
+		try {
+			vcm.signMessage(privKey);
+		} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException | InvalidSerializerException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		view.getView().forEach(h -> sendMessage(vcm, h));
+	}
 
 	// --------------------------------------- Connection Manager Handlers -----------------------------
 	
@@ -236,11 +254,20 @@ public class PBFTProtocol extends GenericProtocol {
     }
 
 
+	/*
+	 * ------------------------------------------------------------------------------------------------------
+	 * 											Request Handlers
+	 * ------------------------------------------------------------------------------------------------------
+	 */
 	
 	/* --------------------------------------- Propose Request Handler ----------------------------------- */
 	
     private void uponProposeRequest(ProposeRequest req, int channel) {
 		logger.info("Received propose request: " + req);
+		if (isInViewChange) {
+			logger.warn("View change in progress. Request rejected.");
+			return;
+		}
 		//check if the node is the leader
 		if (currentSeqN.getNode().equals(self)){
 
@@ -252,7 +279,7 @@ public class PBFTProtocol extends GenericProtocol {
 
 			currentSeqN = new SeqN(currentSeqN.getCounter()+1, self);
 			int operationHash = opsMapKey.hashCode();
-			MessageBatchKey mbKey = new MessageBatchKey(operationHash, currentSeqN, viewNumber);
+			MessageBatchKey mbKey = new MessageBatchKey(operationHash, currentSeqN, view.getViewNumber());
 			PrePrepareMessage prePrepareMsg = new PrePrepareMessage(mbKey,req.getBlock(),cryptoName);
 
 			try {
@@ -263,7 +290,7 @@ public class PBFTProtocol extends GenericProtocol {
 			}
 			
 
-			view.forEach(node -> {	
+			view.getView().forEach(node -> {	
 				if (!node.equals(self)){
 					sendMessage(prePrepareMsg, node);
 				} else {
@@ -279,10 +306,30 @@ public class PBFTProtocol extends GenericProtocol {
 
 	}
 
+	/*
+	 * ------------------------------------------------------------------------------------------------------
+	 * 											Message Handlers
+	 * ------------------------------------------------------------------------------------------------------
+	 */
+
 	// ---------------------- PrePrepare Message Handlers -----------------------------
 
 	private void uponPrePrepareMessage(PrePrepareMessage msg, Host from, short sourceProto, int channel){
-			
+
+		if (isInViewChange) {
+			logger.warn("View change in progress. Message rejected.");
+			return;
+		}
+		
+		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN().lesserThan(currentSeqN)){
+			if (msg.getBatchKey().getViewNumber() != view.getViewNumber())
+				logger.warn("Received a pre-prepare message with an invalid view number: " + msg);
+			else {
+				logger.warn("Received a pre-prepare message with an invalid sequence number: " + msg);
+			}
+			return;
+		}
+
 		if(checkValidMessage(msg,from)){
 			try {
 				opsMap.addOp(msg.getBatchKey().getOpsHash(), msg.getOperation());
@@ -302,20 +349,34 @@ public class PBFTProtocol extends GenericProtocol {
 				e.printStackTrace();
 			}
 
-			view.forEach(node -> {
+			view.getView().forEach(node -> {
 				if (!node.equals(self)){
 					sendMessage(prepareMsg, node);
 				} else {
 					mb.addPrepareMessage(msg.getBatchKey().hashCode());
 				}
 			});
+			// lastLeaderOp = System.currentTimeMillis();
 		}
 	}
 
 	// --------------------------- Prepare Message ---------------------------
 
 	private void uponPrepareMessage(PrepareMessage msg, Host from, short sourceProto, int channel){
-	
+
+		if (isInViewChange) {
+			logger.warn("View change in progress. Message rejected.");
+			return;
+		}
+
+		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN().lesserThan(currentSeqN)){
+			if (msg.getBatchKey().getViewNumber() != view.getViewNumber())
+				logger.warn("Received a prepare message with an invalid view number: " + msg);
+			else {
+				logger.warn("Received a prepare message with an invalid sequence number: " + msg);
+			}
+			return;
+		}
 		if (checkValidMessage(msg,from)){
 
 			int prepareMessagesReceived = 0;
@@ -340,7 +401,7 @@ public class PBFTProtocol extends GenericProtocol {
 						| InvalidSerializerException e) {
 					e.printStackTrace();
 				}
-				view.forEach(node -> {
+				view.getView().forEach(node -> {
 					if (!node.equals(self)){
 						sendMessage(commitMsg, node);
 					}
@@ -352,6 +413,20 @@ public class PBFTProtocol extends GenericProtocol {
 	// -----------------------Commit Message -----------------------------
 
 	private void uponCommitMessage(CommitMessage msg, Host from, short sourceProto, int channel){
+
+		if (isInViewChange) {
+			logger.warn("View change in progress. Message rejected.");
+			return;
+		}
+
+		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN().lesserThan(currentSeqN)){
+			if (msg.getBatchKey().getViewNumber() != view.getViewNumber())
+				logger.warn("Received a commit message with an invalid view number: " + msg);
+			else {
+				logger.warn("Received a commit message with an invalid sequence number: " + msg);
+			}
+			return;
+		}	
 
 		if (checkValidMessage(msg, from)) {
 
@@ -379,15 +454,33 @@ public class PBFTProtocol extends GenericProtocol {
 			if (commitMessagesReceived == failureNumber + 1) {
 				byte[] block = opsMap.getOp(msg.getBatchKey().getOpsHash());
 				try {
-					cancelTimer(noOpTimer);
 					CommittedNotification commitNotificationMsg = new CommittedNotification(block, SignaturesHelper.generateSignature(block, privKey));
 					//TODO: make the send of the op only if the previous is done else put it in a stack.
 					triggerNotification(commitNotificationMsg);
-                    noOpTimer = setupTimer(NoOpTimer.instance, NOOP_SEND_INTERVAL);
+					if (view.isLeader(self)) {
+						cancelTimer(noOpTimer);
+                    	noOpTimer = setupTimer(NoOpTimer.instance, NOOP_SEND_INTERVAL);
+					};
 				} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException e) {
 					logger.error("Error signing committed notification message: " + e.getMessage());
 					e.printStackTrace();
 				}
+			}
+		}
+	}
+
+	// ---------------------- View Change Message ----------------------------
+
+	private void uponViewChangeMessage(ViewChangeMessage msg, Host from, short sourceProto, int channel){
+
+		if (checkValidMessage(msg,from)){
+			if (msg.getViewNumber() > view.getViewNumber()) {
+				logger.info("Received a view change message from " + from + " for view " + msg.getViewNumber());
+				isInViewChange = true;
+				numberOfViewChangesMessagesReceived++;
+				if (numberOfViewChangesMessagesReceived == 2 * failureNumber) {
+					logger.info("Received enough view change messages to start a view change");				
+				
 			}
 		}
 	}
@@ -426,6 +519,16 @@ public class PBFTProtocol extends GenericProtocol {
 			}
 		} else if (msgObj instanceof CommitMessage){
 			CommitMessage msg = (CommitMessage) msgObj;
+			try{
+				check = msg.checkSignature(truststore.getCertificate(msg.getCryptoName()).getPublicKey());
+			}
+			catch(InvalidFormatException | NoSignaturePresentException | NoSuchAlgorithmException | InvalidKeyException |
+			SignatureException | KeyStoreException e){
+				logger.error("Error checking signature in " + msg.getClass() + " from " + from + ": " + e.getMessage());
+				return false;
+			}
+		} else if (msgObj instanceof ViewChangeMessage){
+			ViewChangeMessage msg = (ViewChangeMessage) msgObj;
 			try{
 				check = msg.checkSignature(truststore.getCertificate(msg.getCryptoName()).getPublicKey());
 			}

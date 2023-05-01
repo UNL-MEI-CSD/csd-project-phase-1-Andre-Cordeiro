@@ -22,7 +22,7 @@ start:
 	@for number in $(shell seq 1 $(NBR)); do \
 		echo "${BOLD}${SGREEN}Starting node n°$$number on port $$((5000+($$number-1)*2)) ${S}"; \
 		echo ""; \
-		gnome-terminal --title="Node n°$$number" --geometry=50x25+200+$$((200*($$number))) --working-directory=$(PWD)/deploy -- bash -c "echo '🚀 Starting node n°$$number on port $$((5000+($$number-1)*2)) :'; \
+		gnome-terminal --title="Node n°$$number" --geometry=100x30 --working-directory=$(PWD)/deploy -- bash -c "echo '🚀 Starting node n°$$number on port $$((5000+($$number-1)*2)) :'; \
 		java -Dlog4j.configurationFile=log4j2.xml -jar csd2223-proj1.jar base_port=$$((5000+($$number-1)*2)) initial_membership=$(MEMBERSHIP) crypto_name=node$$number; \
         exec bash;" ;\
 	done

@@ -4,7 +4,7 @@ import pt.unl.fct.di.novasys.babel.generic.ProtoNotification;
 
 public class CommittedNotification extends ProtoNotification {
 
-	public final static short NOTIFICATION_ID = 111;
+	public final static short NOTIFICATION_ID = 131;
 	
 	private final byte[] block;
 	private final byte[] signature;
@@ -23,6 +23,10 @@ public class CommittedNotification extends ProtoNotification {
 		return signature;
 	}
 	
+	@Override
+	public String toString() {
+		return "CommittedNotification [block=" + block + ", signature=" + signature + "]";
+	}
 	
 
 }
