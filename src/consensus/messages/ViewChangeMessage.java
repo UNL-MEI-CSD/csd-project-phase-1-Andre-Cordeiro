@@ -72,6 +72,8 @@ public class ViewChangeMessage extends SignedProtoMessage{
         return cryptoName;
     }
 
+
+
     @Override
     public String toString() {
         return "viewChangeMessage []";

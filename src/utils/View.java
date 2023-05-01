@@ -8,12 +8,10 @@ import pt.unl.fct.di.novasys.network.data.Host;
 public class View {
 
     private List<Host> view;
-    private Host leader;
     private int viewNumber;
 
-    public View(List<Host> view, Host leader, int viewNumber) {
+    public View(List<Host> view, int viewNumber) {
         this.view = view;
-        this.leader = leader;
         this.viewNumber = viewNumber;
     }
 
@@ -27,7 +25,7 @@ public class View {
     }
 
     public Host getLeader() {
-        return leader;
+        return view.get(viewNumber);
     }
 
     public int getViewNumber() {
@@ -35,11 +33,19 @@ public class View {
     }
 
     public boolean isLeader(Host host) {
-        return leader.equals(host);
+        return view.get(viewNumber%view.size()).equals(host);
+    }
+    
+    public boolean checkIfLeader(Host host, int viewNumber) {
+        return view.get(viewNumber%view.size()).equals(host);
     }
 
     public void incrementViewNumber() {
         viewNumber++;
+    }
+
+    public void setViewNumber(int viewNumber) {
+        this.viewNumber = viewNumber;
     }
 
     public boolean isMember(Host host) {
@@ -54,15 +60,10 @@ public class View {
         return view.size();
     }
 
-    public void setLeader(Host leader) {
-        this.leader = leader;
-    }
-
     @Override
     public String toString() {
         return "View{" +
                 "view=" + view +
-                ", leader=" + leader +
                 ", viewNumber=" + viewNumber +
                 '}';
     }

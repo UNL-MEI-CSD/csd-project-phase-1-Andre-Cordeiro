@@ -20,6 +20,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import consensus.messages.CommitMessage;
+import consensus.messages.NewViewMessage;
 import consensus.messages.PrePrepareMessage;
 import consensus.messages.PrepareMessage;
 import consensus.messages.ViewChangeMessage;
@@ -74,6 +75,7 @@ public class PBFTProtocol extends GenericProtocol {
 	private final int NOOP_SEND_INTERVAL;
 
 	private long noOpTimer;
+	private long leaderTimer;
     private long lastLeaderOp;
 
 	// Crypto
@@ -91,7 +93,7 @@ public class PBFTProtocol extends GenericProtocol {
 	private View view;
 	private int failureNumber;
 	private boolean isInViewChange;
-	private int numberOfViewChangesMessagesReceived;
+	private List<ViewChangeMessage> viewChangeMessagesReceived = new LinkedList<>();
 
 	//State
 	private OpsMap opsMap;
@@ -110,14 +112,12 @@ public class PBFTProtocol extends GenericProtocol {
 		
 		
 		opsMap = new OpsMap();
-		this.view = new View(1);
+		this.view = new View(0);
 		String[] membership = props.getProperty(INITIAL_MEMBERSHIP_KEY).split(",");
 		for (String s : membership) {
 			String[] tokens = s.split(":");
 			this.view.addMember(new Host(InetAddress.getByName(tokens[0]), Integer.parseInt(tokens[1])));
 		}
-
-		view.setLeader(view.getView().get(0));
 
 		failureNumber = (view.size() - 1) / 3;
 
@@ -163,12 +163,14 @@ public class PBFTProtocol extends GenericProtocol {
         registerMessageHandler(peerChannel, PrepareMessage.MESSAGE_ID, this::uponPrepareMessage, this::uponMessageFailed);
 		registerMessageHandler(peerChannel, CommitMessage.MESSAGE_ID, this::uponCommitMessage, this::uponMessageFailed);
 		registerMessageHandler(peerChannel, ViewChangeMessage.MESSAGE_ID, this::uponViewChangeMessage, this::uponMessageFailed);
+		registerMessageHandler(peerChannel, NewViewMessage.MESSAGE_ID, this::uponNewViewMessage, this::uponMessageFailed);
 
 		// Message Serializers
 		registerMessageSerializer(peerChannel, PrePrepareMessage.MESSAGE_ID, PrePrepareMessage.serializer);
 		registerMessageSerializer(peerChannel, PrepareMessage.MESSAGE_ID, PrepareMessage.serializer);
 		registerMessageSerializer(peerChannel, CommitMessage.MESSAGE_ID, CommitMessage.serializer);
 		registerMessageSerializer(peerChannel, ViewChangeMessage.MESSAGE_ID, ViewChangeMessage.serializer);
+		registerMessageSerializer(peerChannel, NewViewMessage.MESSAGE_ID, NewViewMessage.serializer);
 
 		// Timer Handlers
 		registerTimerHandler(LeaderTimer.TIMER_ID, this::onLeaderTimer);
@@ -182,7 +184,7 @@ public class PBFTProtocol extends GenericProtocol {
 		
 		// TODO: Open connections to all nodes in the (initial) view
 		view.getView().forEach(this::openConnection);
-		setupPeriodicTimer(LeaderTimer.instance, LEADER_TIMEOUT, LEADER_TIMEOUT / 3);
+		leaderTimer = setupPeriodicTimer(LeaderTimer.instance, LEADER_TIMEOUT, LEADER_TIMEOUT / 3);
         lastLeaderOp = System.currentTimeMillis();
 
 		triggerNotification(new InitialNotification(self, peerChannel));
@@ -217,6 +219,7 @@ public class PBFTProtocol extends GenericProtocol {
 	private void startViewChange() {
 		logger.info("Starting view change");
 		isInViewChange = true;
+		cancelTimer(leaderTimer);
 		view.incrementViewNumber();
 		
 		ViewChangeMessage vcm = new ViewChangeMessage(view.getViewNumber(), currentSeqN.getCounter(), self.getPort(), cryptoName);
@@ -226,7 +229,12 @@ public class PBFTProtocol extends GenericProtocol {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		view.getView().forEach(h -> sendMessage(vcm, h));
+		view.getView().forEach(h -> {
+			if (!h.equals(self)) {
+				sendMessage(vcm, h);
+				logger.info("Sending view change message to " + h);
+			}
+		});
 	}
 
 	// --------------------------------------- Connection Manager Handlers -----------------------------
@@ -472,18 +480,57 @@ public class PBFTProtocol extends GenericProtocol {
 	// ---------------------- View Change Message ----------------------------
 
 	private void uponViewChangeMessage(ViewChangeMessage msg, Host from, short sourceProto, int channel){
-
+		logger.info("Received a view change message from " + from + " for view " + msg.getViewNumber());
 		if (checkValidMessage(msg,from)){
-			if (msg.getViewNumber() > view.getViewNumber()) {
-				logger.info("Received a view change message from " + from + " for view " + msg.getViewNumber());
-				isInViewChange = true;
-				numberOfViewChangesMessagesReceived++;
-				if (numberOfViewChangesMessagesReceived == 2 * failureNumber) {
-					logger.info("Received enough view change messages to start a view change");	
-				}			
+			if (msg.getViewNumber() >= view.getViewNumber()) {
+				if (view.checkIfLeader(self, msg.getViewNumber())){
+					if (!viewChangeMessagesReceived.contains(msg)) {
+						if (viewChangeMessagesReceived.isEmpty()) {
+							viewChangeMessagesReceived.add(msg);
+						}
+						else {
+							if (viewChangeMessagesReceived.get(0).getViewNumber() == msg.getViewNumber()) {
+								viewChangeMessagesReceived.add(msg);
+							}
+							else {
+								if (viewChangeMessagesReceived.get(0).getViewNumber() < msg.getViewNumber()) {
+									viewChangeMessagesReceived.clear();
+									viewChangeMessagesReceived.add(msg);
+								}
+							}
+						}
+					}
+					else {
+						logger.warn("Received a duplicated view change message: " + msg);
+						return;
+					}
+					logger.info("Received " + viewChangeMessagesReceived.size() + " view change messages");
+					if (viewChangeMessagesReceived.size() == 2 * failureNumber) {
+						NewViewMessage newViewMsg = new NewViewMessage(msg.getViewNumber(), viewChangeMessagesReceived, new LinkedList<>(), cryptoName);
+						try {
+							newViewMsg.signMessage(privKey);
+						} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException
+								| InvalidSerializerException e) {
+							e.printStackTrace();
+						}
+						view.getView().forEach(node -> sendMessage(newViewMsg, node));
+					}	
+				}				
 			}
 		}
 	}
+
+	// ---------------------- New View Message ----------------------------
+
+	private void uponNewViewMessage(NewViewMessage msg, Host from, short sourceProto, int channel){
+		if (checkValidMessage(msg,from)){
+			logger.info("Received a new view message from " + from + " for view " + msg.getViewNumber());
+			view.setViewNumber(msg.getViewNumber());
+			isInViewChange = false;
+			triggerNotification(new ViewChange(view));
+		}
+	}
+
 
 	// ------------------------- Failure handling ------------------------- //
 
@@ -537,6 +584,16 @@ public class PBFTProtocol extends GenericProtocol {
 				logger.error("Error checking signature in " + msg.getClass() + " from " + from + ": " + e.getMessage());
 				return false;
 			}
+		} else if (msgObj instanceof NewViewMessage){
+			NewViewMessage msg = (NewViewMessage) msgObj;
+			try{
+				check = msg.checkSignature(truststore.getCertificate(msg.getCryptoName()).getPublicKey());
+			}
+			catch(InvalidFormatException | NoSignaturePresentException | NoSuchAlgorithmException | InvalidKeyException |
+			SignatureException | KeyStoreException e){
+				logger.error("Error checking signature in " + msg.getClass() + " from " + from + ": " + e.getMessage());
+				return false;
+			}
 		} else {
 			logger.error("Unknown message type: " + msgObj.getClass());
 			throw new IllegalArgumentException("Message is not valid");
@@ -550,5 +607,4 @@ public class PBFTProtocol extends GenericProtocol {
 	private void newHighestSeqN(){
 		highestSeqN = new SeqN(currentSeqN.getCounter(), currentSeqN.getNode());
 	}
-		
 }
