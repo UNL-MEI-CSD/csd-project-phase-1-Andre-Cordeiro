@@ -170,7 +170,7 @@ public class BlockChainProtocol extends GenericProtocol {
 			this.view.add(vc.getView().get(i));
 		}
 		//TODO: Compute correctly who is the leader and not assume that you are always the leader.
-		this.leader = (this.view.get(0).equals(self));
+		this.leader = (this.view.get(this.viewNumber%this.view.size()).equals(self));
 		
 	}
 	
