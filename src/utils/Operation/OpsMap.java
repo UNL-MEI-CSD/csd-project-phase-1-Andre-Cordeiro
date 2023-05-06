@@ -31,6 +31,10 @@ public class OpsMap {
                 opsMap.clear();
         }
 
+        public void clearOp(int opsMapKeyHash) {
+                opsMap.remove(opsMapKeyHash);
+        }
+
         public int size() {
                 return opsMap.size();
         }

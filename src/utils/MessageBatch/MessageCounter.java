@@ -1,34 +1,34 @@
 package utils.MessageBatch;
 
+import java.util.LinkedList;
+import java.util.List;
+
 import pt.unl.fct.di.novasys.babel.generic.ProtoMessage;
+import pt.unl.fct.di.novasys.network.data.Host;
 
 public class MessageCounter {
     
-    private ProtoMessage message;
-    private int counter;
+    private List<Host> hosts;
 
-    public MessageCounter(ProtoMessage message) {
-        this.message = message;
-        this.counter = 0;
+    public MessageCounter() {
+        this.hosts = new LinkedList<>();
     }
 
-    public ProtoMessage getMessage() {
-        return message;
-    }
 
     public int getCounter() {
-        return counter;
+        return this.hosts.size();
     }
 
-    public void incrementCounter() {
-        this.counter++;
+    public void incrementCounter(Host host) {
+        if (!this.hosts.contains(host)) {
+            this.hosts.add(host);
+        }
     }
 
     @Override
     public String toString() {
         return "MessageCounter{" +
-                "message=" + message +
-                ", counter=" + counter +
+                ", hosts=" + hosts +
                 '}';
     }
 }

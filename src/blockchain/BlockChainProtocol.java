@@ -140,7 +140,6 @@ public class BlockChainProtocol extends GenericProtocol {
 				byte[] signature = SignaturesHelper.generateSignature(request, this.key);
 				
 				sendRequest(new ProposeRequest(request, signature), PBFTProtocol.PROTO_ID);
-
 				
 			} catch (Exception e) {
 				e.printStackTrace();

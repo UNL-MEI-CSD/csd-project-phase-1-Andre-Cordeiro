@@ -3,9 +3,11 @@ package utils.MessageBatch;
 import java.util.HashMap;
 import java.util.Map;
 
+import pt.unl.fct.di.novasys.network.data.Host;
+
 public class MessageBatch {
 
-    private Map<Integer, int[]> messageBatch;
+    private Map<Integer, MessageCounter[]> messageBatch;
 
     public MessageBatch() {
         this.messageBatch = new HashMap<>();
@@ -18,23 +20,29 @@ public class MessageBatch {
 
     public void addMessage(int opsHash) {
         if (!this.messageBatch.containsKey(opsHash)) {
-            this.messageBatch.put(opsHash, new int[3]);
+            this.messageBatch.put(opsHash, new MessageCounter[2]);
         }
         else {
             throw new RuntimeException("The opsHash should not be in the map");
         }
     }
 
-    public int addPrepareMessage(int opsHash) {
-        int[] messageCounters = this.messageBatch.get(opsHash);
-        messageCounters[1]++;
-        return messageCounters[1];
+    public int addPrepareMessage(int opsHash, Host host) {
+        MessageCounter[] messageCounters = this.messageBatch.get(opsHash);
+        if (messageCounters[0] == null) {
+            messageCounters[0] = new MessageCounter();
+        }
+        messageCounters[0].incrementCounter(host);
+        return messageCounters[0].getCounter();
     }
 
-    public int addCommitMessage(int opsHash) {
-        int[] messageCounters = this.messageBatch.get(opsHash);
-        messageCounters[2]++;
-        return messageCounters[2];
+    public int addCommitMessage(int opsHash, Host host) {
+        MessageCounter[] messageCounters = this.messageBatch.get(opsHash);
+        if (messageCounters[1] == null) {
+            messageCounters[1] = new MessageCounter();
+        }
+        messageCounters[1].incrementCounter(host);
+        return messageCounters[1].getCounter();
     }
 
     public void removePrePrepareMessage(int opsHash) {
@@ -49,6 +57,10 @@ public class MessageBatch {
         return this.messageBatch.size();
     }
 
+    public void clearMessage(int opsHash) {
+        this.messageBatch.remove(opsHash);
+    }
+
     public int[] getKeys() {
         int[] keys = new int[this.messageBatch.size()];
         int i = 0;
@@ -59,11 +71,11 @@ public class MessageBatch {
         return keys;
     }
 
-    public  int[] getValues(int opsHash) {
+    public  MessageCounter[] getValues(int opsHash) {
         return this.messageBatch.get(opsHash);
     }
 
-    public Map<Integer, int[]> getMessageBatch() {
+    public Map<Integer, MessageCounter[]> getMessageBatch() {
         return messageBatch;
     }
 

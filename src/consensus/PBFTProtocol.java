@@ -92,6 +92,7 @@ public class PBFTProtocol extends GenericProtocol {
 	private OpsMap opsMap;
 	private MessageBatch mb;
 
+
 	
 	public PBFTProtocol(Properties props) throws NumberFormatException, UnknownHostException {
 		super(PBFTProtocol.PROTO_NAME, PBFTProtocol.PROTO_ID);
@@ -352,7 +353,7 @@ public class PBFTProtocol extends GenericProtocol {
 				if (!node.equals(self)){
 					sendMessage(prepareMsg, node);
 				} else {
-					mb.addPrepareMessage(msg.getBatchKey().hashCode());
+					mb.addPrepareMessage(msg.getBatchKey().hashCode(), self);
 				}
 			});
 			// lastLeaderOp = System.currentTimeMillis();
@@ -382,7 +383,7 @@ public class PBFTProtocol extends GenericProtocol {
 			try {
 				int hash = msg.getBatchKey().hashCode();
 				if (mb.containsMessage(hash)) {
-					prepareMessagesReceived = mb.addPrepareMessage(hash);
+					prepareMessagesReceived = mb.addPrepareMessage(hash, from);
 				}
 				else {
 					logger.warn("Received a prepare message for an unknown operation: " + msg);
@@ -403,6 +404,8 @@ public class PBFTProtocol extends GenericProtocol {
 				view.getView().forEach(node -> {
 					if (!node.equals(self)){
 						sendMessage(commitMsg, node);
+					} else {
+						mb.addCommitMessage(msg.getBatchKey().hashCode(), self);
 					}
 				});
 			}
@@ -440,7 +443,7 @@ public class PBFTProtocol extends GenericProtocol {
 			try {
 				int hash = msg.getBatchKey().hashCode();
 				if (mb.containsMessage(hash)) {
-					commitMessagesReceived = mb.addCommitMessage(hash);
+					commitMessagesReceived = mb.addCommitMessage(hash, from);
 				}
 				else {
 					logger.warn("Received a commit message for an unknown operation: " + msg);
@@ -454,8 +457,9 @@ public class PBFTProtocol extends GenericProtocol {
 				byte[] block = opsMap.getOp(msg.getBatchKey().getOpsHash());
 				try {
 					CommittedNotification commitNotificationMsg = new CommittedNotification(block, SignaturesHelper.generateSignature(block, privKey));
-					//TODO: make the send of the op only if the previous is done else put it in a stack.
 					triggerNotification(commitNotificationMsg);
+					// mb.clearMessage(msg.getBatchKey().hashCode());
+					// opsMap.clearOp(msg.getBatchKey().getOpsHash());
 					// if (view.isLeader(self)) {
 					// 	cancelTimer(noOpTimer);
                     // 	noOpTimer = setupTimer(NoOpTimer.instance, NOOP_SEND_INTERVAL);
