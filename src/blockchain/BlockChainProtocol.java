@@ -8,6 +8,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -100,6 +101,11 @@ public class BlockChainProtocol extends GenericProtocol {
 			e.printStackTrace();
 		}
 
+		//init state
+		this.leader = false;
+		this.unhandledRequestsMessages = new HashMap<>();
+		this.pendingRequestsTimers = new HashMap<>();
+
 		
 		// Request Handlers
 		registerRequestHandler(ClientRequest.REQUEST_ID, this::handleClientRequest);
@@ -135,10 +141,7 @@ public class BlockChainProtocol extends GenericProtocol {
 				
 				sendRequest(new ProposeRequest(request, signature), PBFTProtocol.PROTO_ID);
 
-				//Start a timer for this request
-				CheckUnhandledRequestsPeriodicTimer timer = new CheckUnhandledRequestsPeriodicTimer(req.getRequestId());
-				pendingRequestsTimers.put(req.getRequestId(), setupTimer(timer, checkRequestsPeriod));
-
+				
 			} catch (Exception e) {
 				e.printStackTrace();
 				System.exit(1); //Catastrophic failure!!!
@@ -148,6 +151,9 @@ public class BlockChainProtocol extends GenericProtocol {
 			RedirectClientRequestMessage msg = new RedirectClientRequestMessage(req);
 			sendMessage(msg, this.view.getLeader());
 		}
+		//Start a timer for this request
+		CheckUnhandledRequestsPeriodicTimer timer = new CheckUnhandledRequestsPeriodicTimer(req.getRequestId());
+		pendingRequestsTimers.put(req.getRequestId(), setupTimer(timer, checkRequestsPeriod));
 	}
 	
 	/* ----------------------------------------------- ------------- ------------------------------------------ */
@@ -174,8 +180,10 @@ public class BlockChainProtocol extends GenericProtocol {
 		// get the client request from the block
 		ClientRequest req = ClientRequest.fromBytes(cn.getBlock());
 		// cancel the timer for this request
-		cancelTimer(pendingRequestsTimers.get(req.getRequestId()));
-		pendingRequestsTimers.remove(req.getRequestId());
+		if (pendingRequestsTimers.containsKey(req.getRequestId())) {
+			cancelTimer(pendingRequestsTimers.get(req.getRequestId()));
+			pendingRequestsTimers.remove(req.getRequestId());
+		}
 		// remove the list of unhandled requests
 		if (unhandledRequestsMessages.containsKey(req.getRequestId())) {
 			unhandledRequestsMessages.remove(req.getRequestId());
