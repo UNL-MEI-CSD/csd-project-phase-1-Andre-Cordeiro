@@ -8,16 +8,14 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Properties;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import blockchain.messages.ClientRequestUnhandledMessage;
+import blockchain.messages.RedirectClientRequestMessage;
 import blockchain.requests.ClientRequest;
-import blockchain.requests.RedirectClientRequest;
 import blockchain.timers.CheckUnhandledRequestsPeriodicTimer;
 import blockchain.timers.LeaderSuspectTimer;
 import consensus.PBFTProtocol;
@@ -28,8 +26,6 @@ import consensus.requests.ProposeRequest;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
 import pt.unl.fct.di.novasys.babel.generic.ProtoMessage;
-import pt.unl.fct.di.novasys.channel.tcp.MultithreadedTCPChannel;
-import pt.unl.fct.di.novasys.channel.tcp.TCPChannel;
 import pt.unl.fct.di.novasys.network.data.Host;
 import utils.Crypto;
 import utils.SignaturesHelper;
@@ -92,12 +88,8 @@ public class BlockChainProtocol extends GenericProtocol {
 		}
 
 		
-
-		// registerMessageHandler(peerChannel, RedirectClientRequestMessage.MSG_ID, this::handleRedirectClientRequestMessage);
-
 		// Request Handlers
 		registerRequestHandler(ClientRequest.REQUEST_ID, this::handleClientRequest);
-		registerRequestHandler(RedirectClientRequest.REQUEST_ID, this::handleRedirectClientRequest);
 		
 		// Timer Handlers
 		registerTimerHandler(CheckUnhandledRequestsPeriodicTimer.TIMER_ID, this::handleCheckUnhandledRequestsPeriodicTimer);
@@ -139,36 +131,10 @@ public class BlockChainProtocol extends GenericProtocol {
 				System.exit(1); //Catastrophic failure!!!
 			}
 		} else {
-			//TODO: Redirect this request to the leader via a specialized message
-			RedirectClientRequest request = new RedirectClientRequest(req);
-			try {
-				sendRequest(request, BlockChainProtocol.PROTO_ID);
-				logger.info("Redirected a ClientRequeest with id: " + req.getRequestId() + " to the leader");
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
+			//Redirect the request to the leader
+			RedirectClientRequestMessage msg = new RedirectClientRequestMessage(req);
+			sendMessage(msg, this.view.getLeader());
 		}
-	}
-
-	private void handleRedirectClientRequest(RedirectClientRequest req, short ProtoID) {
-
-		if(this.leader) {
-			
-			try {
-				logger.info("Received a ClientRequeest with id: " + req.getClientRequest().getRequestId());
-				//TODO: This is a super over simplification we will handle latter
-				//Only one block should be submitted for agreement at a time
-				//Also this assumes that a block only contains a single client request
-				byte[] request = req.getClientRequest().generateByteRepresentation();
-				byte[] signature = SignaturesHelper.generateSignature(request, this.key);
-				
-				sendRequest(new ProposeRequest(request, signature), PBFTProtocol.PROTO_ID);
-			} catch (Exception e) {
-				e.printStackTrace();
-				System.exit(1); //Catastrophic failure!!!
-			}
-		}
-		
 	}
 	
 	/* ----------------------------------------------- ------------- ------------------------------------------ */
@@ -202,18 +168,41 @@ public class BlockChainProtocol extends GenericProtocol {
 		// Message Handlers
 		try {
 			registerMessageHandler(peerChannel, ClientRequestUnhandledMessage.MESSAGE_ID, this::handleClientRequestUnhandledMessage, this::uponMessageFailed);
+			registerMessageHandler(peerChannel, RedirectClientRequestMessage.MESSAGE_ID, this::handleRedirectClientRequestMessage, this::uponMessageFailed);
 		} catch (HandlerRegistrationException e) {
 			e.printStackTrace();
 		}
 
 		// Message Serializers
 		registerMessageSerializer(peerChannel, ClientRequestUnhandledMessage.MESSAGE_ID, ClientRequestUnhandledMessage.serializer);
+		registerMessageSerializer(peerChannel, RedirectClientRequestMessage.MESSAGE_ID, RedirectClientRequestMessage.serializer);
 		
 	}
 		
 	/* ----------------------------------------------- ------------- ------------------------------------------ */
     /* ---------------------------------------------- MESSAGE HANDLER ----------------------------------------- */
     /* ----------------------------------------------- ------------- ------------------------------------------ */
+
+	// ------------------------------------------ RedirectClientRequestMessage ------------------------------------------*/
+
+	private void handleRedirectClientRequestMessage(RedirectClientRequestMessage msg, Host from, short sourceProto, int channel) {
+		if(this.leader) {
+			
+			try {
+				logger.info("Received a RedirectClientRequestMessage with id: " + msg.getClientRequest().getRequestId() + " from: " + from);
+				
+				byte[] request = msg.getClientRequest().generateByteRepresentation();
+				byte[] signature = SignaturesHelper.generateSignature(request, this.key);
+				
+				sendRequest(new ProposeRequest(request, signature), PBFTProtocol.PROTO_ID);
+			} catch (Exception e) {
+				e.printStackTrace();
+				System.exit(1); //Catastrophic failure!!!
+			}
+		} else {
+			logger.warn("Received a RedirectClientRequestMessage without being the leader");
+		}
+	}
     
 	// ------------------------------------------ ClientRequestUnhandledMessage ------------------------------------------*/
 
