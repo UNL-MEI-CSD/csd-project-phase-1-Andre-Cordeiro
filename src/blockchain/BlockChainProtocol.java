@@ -63,6 +63,7 @@ public class BlockChainProtocol extends GenericProtocol {
 	private final long leaderTimeout;
  	
 	//State
+	private boolean waitingForViewChange;
 	private Host self;
 	private int viewNumber;
 	private View view;
@@ -86,6 +87,7 @@ public class BlockChainProtocol extends GenericProtocol {
 		
 		viewNumber = 0;
 		view = new View(viewNumber);
+		waitingForViewChange = false;
 		
 		//Read timers and timeouts configurations
 		checkRequestsPeriod = Long.parseLong(props.getProperty(PERIOD_CHECK_REQUESTS));
@@ -132,6 +134,10 @@ public class BlockChainProtocol extends GenericProtocol {
     
 	public void handleClientRequest(ClientRequest req, short protoID) {
 		
+		if (waitingForViewChange) {
+			return;
+		}
+
 		if(this.leader) {
 			
 			try {
@@ -172,28 +178,36 @@ public class BlockChainProtocol extends GenericProtocol {
 		this.f = (this.view.getView().size() - 1)/3;
 		
 		this.leader = this.view.getLeader().equals(this.self);
-		
+		waitingForViewChange = false;
 	}
 	
 	public void handleCommittedNotification(CommittedNotification cn, short from) {
+		
+		if (waitingForViewChange) {
+			return;
+		}
 		//TODO: write this handler
 		logger.info("Received a commit notification with id: " + cn + " from: " + from);
 
 		// get the client request from the block
 		ClientRequest req = ClientRequest.fromBytes(cn.getBlock());
 		// cancel the timer for this request
-		// if (pendingRequestsTimers.containsKey(req.getRequestId())) {
-		// 	cancelTimer(pendingRequestsTimers.get(req.getRequestId()));
-		// 	pendingRequestsTimers.remove(req.getRequestId());
-		// }
-		// // remove the list of unhandled requests
-		// if (unhandledRequestsMessages.containsKey(req.getRequestId())) {
-		// 	unhandledRequestsMessages.remove(req.getRequestId());
-		// }
+		if (pendingRequestsTimers.containsKey(req.getRequestId())) {
+			cancelTimer(pendingRequestsTimers.get(req.getRequestId()));
+			pendingRequestsTimers.remove(req.getRequestId());
+		}
+		// remove the list of unhandled requests
+		if (unhandledRequestsMessages.containsKey(req.getRequestId())) {
+			unhandledRequestsMessages.remove(req.getRequestId());
+		}
 		
 	}
 
 	public void handleInitialNotification(InitialNotification in, short from) {
+
+		if (waitingForViewChange) {
+			return;
+		}
 
 		this.self = in.getSelf();
 		
@@ -244,6 +258,9 @@ public class BlockChainProtocol extends GenericProtocol {
 
 	private void handleClientRequestUnhandledMessage(ClientRequestUnhandledMessage msg, Host from, short sourceProto, int channel) {
 		
+		if (waitingForViewChange) {
+			return;
+		}
 
 		// Put the host in the list of hosts that have sent a ClientRequestUnhandledMessage
 		if (!this.unhandledRequestsMessages.containsKey(msg.getPendingRequestID())) {
@@ -320,6 +337,10 @@ public class BlockChainProtocol extends GenericProtocol {
 	
 	public void handleLeaderSuspectTimer(LeaderSuspectTimer t, long timerId) {
 
+		if (waitingForViewChange) {
+			return;
+		}
+		
 		//Send a StartViewChange message to his PBFT protocol
 		logger.info("Leader suspect timer expired for request " + t.getRequestID());
 		this.unhandledRequestsMessages.remove(t.getRequestID());
@@ -329,6 +350,7 @@ public class BlockChainProtocol extends GenericProtocol {
 			signature = SignaturesHelper.generateSignature(t.getRequestID().toString().getBytes(), this.key);
 			SuspectLeader suspectLeader = new SuspectLeader(t.getRequestID(), signature);
 			sendRequest(suspectLeader, PBFTProtocol.PROTO_ID);
+			waitingForViewChange = true;
 		} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException e) {
 			e.printStackTrace();
 		}

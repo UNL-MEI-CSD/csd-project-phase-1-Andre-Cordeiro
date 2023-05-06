@@ -28,6 +28,9 @@ public class MessageBatch {
     }
 
     public int addPrepareMessage(int opsHash, Host host) {
+        if (!this.messageBatch.containsKey(opsHash)) {
+            addMessage(opsHash);
+        }
         MessageCounter[] messageCounters = this.messageBatch.get(opsHash);
         if (messageCounters[0] == null) {
             messageCounters[0] = new MessageCounter();
@@ -37,6 +40,9 @@ public class MessageBatch {
     }
 
     public int addCommitMessage(int opsHash, Host host) {
+        if (!this.messageBatch.containsKey(opsHash)) {
+            addMessage(opsHash);
+        }
         MessageCounter[] messageCounters = this.messageBatch.get(opsHash);
         if (messageCounters[1] == null) {
             messageCounters[1] = new MessageCounter();

@@ -12,10 +12,12 @@ public class ViewChange extends ProtoNotification {
 	
 	private final View view;
 	
+	private final int seqNumber;
 	
-	public ViewChange(View view) {
+	public ViewChange(View view, int seqNumber) {
 		super(ViewChange.NOTIFICATION_ID);
 		this.view = view;
+		this.seqNumber = seqNumber;
 	}
 
 
@@ -23,9 +25,12 @@ public class ViewChange extends ProtoNotification {
 		return view.getView();
 	}
 
-
 	public int getViewNumber() {
 		return view.getViewNumber();
+	}
+
+	public int getSeqNumber() {
+		return seqNumber;
 	}
 
 	

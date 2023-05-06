@@ -21,27 +21,27 @@ public class View {
     }
 
     public List<Host> getView() {
-        return view;
+        return this.view;
     }
 
     public Host getLeader() {
-        return view.get(viewNumber);
+        return this.view.get(this.viewNumber);
     }
 
     public int getViewNumber() {
-        return viewNumber;
+        return this.viewNumber;
     }
 
     public boolean isLeader(Host host) {
-        return view.get(viewNumber%view.size()).equals(host);
+        return this.view.get(this.viewNumber%this.view.size()).equals(host);
     }
     
     public boolean checkIfLeader(Host host, int viewNumber) {
-        return view.get(viewNumber%view.size()).equals(host);
+        return this.view.get(viewNumber%this.view.size()).equals(host);
     }
 
     public void incrementViewNumber() {
-        viewNumber++;
+        this.viewNumber++;
     }
 
     public void setViewNumber(int viewNumber) {
@@ -49,22 +49,22 @@ public class View {
     }
 
     public boolean isMember(Host host) {
-        return view.contains(host);
+        return this.view.contains(host);
     }
 
     public void addMember(Host host) {
-        view.add(host);
+        this.view.add(host);
     }
 
     public int size() {
-        return view.size();
+        return this.view.size();
     }
 
     @Override
     public String toString() {
         return "View{" +
-                "view=" + view +
-                ", viewNumber=" + viewNumber +
+                "view=" + this.view +
+                ", viewNumber=" + this.viewNumber +
                 '}';
     }
 }

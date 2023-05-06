@@ -13,6 +13,7 @@ import java.security.SignatureException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.util.Properties;
+import java.util.UUID;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -84,7 +85,7 @@ public class PBFTProtocol extends GenericProtocol {
 	private Host self;
 	private View view;
 	private int failureNumber;
-	private boolean isInViewChange;
+	// private boolean isInViewChange;
 
 	//State
 	private OpsMap opsMap;
@@ -180,7 +181,7 @@ public class PBFTProtocol extends GenericProtocol {
 		triggerNotification(new InitialNotification(self, peerChannel));
 		
 		//Installing first view
-		triggerNotification(new ViewChange(view));
+		triggerNotification(new ViewChange(view, currentSeqN));
 	}
 
 	/* --------------------------------------- Timer Handlers ----------------------------------- */
@@ -262,11 +263,11 @@ public class PBFTProtocol extends GenericProtocol {
 	/* --------------------------------------- Propose Request Handler ----------------------------------- */
 	
     private void uponProposeRequest(ProposeRequest req, int channel) {
-		logger.info("Received propose request: " + req);
-		if (isInViewChange) {
-			logger.warn("View change in progress. Request rejected.");
-			return;
-		}
+		// logger.info("Received propose request: " + req);
+		// if (isInViewChange) {
+		// 	logger.warn("View change in progress. Request rejected.");
+		// 	return;
+		// }
 
 		//check if the signature is valid
 		try {
@@ -287,7 +288,7 @@ public class PBFTProtocol extends GenericProtocol {
 				return;
 			}
 
-			currentSeqN = currentSeqN++;
+			this.currentSeqN++;
 			int operationHash = opsMapKey.hashCode();
 			MessageBatchKey mbKey = new MessageBatchKey(operationHash, currentSeqN, view.getViewNumber());
 			PrePrepareMessage prePrepareMsg = new PrePrepareMessage(mbKey,req.getBlock(),cryptoName);
@@ -332,18 +333,16 @@ public class PBFTProtocol extends GenericProtocol {
 		}
 
 		// make a standard agreement but with the operation of suspect leader
-		isInViewChange = true;
-		
+		currentSeqN++;	
 		//Create a normal agreement for the suspect leader with skiping the pre-prepare phase
-		OpsMapKey opsMapKey = new OpsMapKey(req.getTimestamp(), req.hashCode());
-		if (opsMap.containsOp(opsMapKey.hashCode())){
+		if (opsMap.containsOp( req.hashCode())){
 			logger.warn("Request received :" + req + "is a duplicate");
 			return;
 		} else {
-			opsMap.addOp(opsMapKey.hashCode(), req.getPendingRequestID().toString().getBytes());
+			opsMap.addOp( req.hashCode(), req.getPendingRequestID().toString().getBytes());
+			logger.info("Suspect leader request added to the opsMap " + req.getPendingRequestID().toString());
 		}
-		currentSeqN = currentSeqN++;
-		int operationHash = opsMapKey.hashCode();
+		int operationHash =  req.hashCode();
 		MessageBatchKey mbKey = new MessageBatchKey(operationHash, currentSeqN, view.getViewNumber());
 		PrepareMessage prepareMsg = new PrepareMessage(mbKey,cryptoName);
 
@@ -360,8 +359,7 @@ public class PBFTProtocol extends GenericProtocol {
 			if (!node.equals(self)){
 				sendMessage(prepareMsg, node);
 			} else {
-				mb.addMessage(mbKey.hashCode());
-				mb.addPrepareMessage(operationHash, self);
+				mb.addPrepareMessage(mbKey.hashCode(), self);
 			}
 		});
 		
@@ -379,10 +377,10 @@ public class PBFTProtocol extends GenericProtocol {
 
 	private void uponPrePrepareMessage(PrePrepareMessage msg, Host from, short sourceProto, int channel){
 
-		if (isInViewChange) {
-			logger.warn("View change in progress. Message rejected.");
-			return;
-		}
+		// if (isInViewChange) {
+		// 	logger.warn("View change in progress. Message rejected.");
+		// 	return;
+		// }
 		
 		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN() < currentSeqN){
 			if (msg.getBatchKey().getViewNumber() != view.getViewNumber())
@@ -427,10 +425,10 @@ public class PBFTProtocol extends GenericProtocol {
 
 	private void uponPrepareMessage(PrepareMessage msg, Host from, short sourceProto, int channel){
 
-		if (isInViewChange) {
-			logger.warn("View change in progress. Message rejected.");
-			return;
-		}
+		// if (isInViewChange) {
+		// 	logger.warn("View change in progress. Message rejected.");
+		// 	return;
+		// }
 
 		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN() < currentSeqN){
 			if (msg.getBatchKey().getViewNumber() != view.getViewNumber())
@@ -445,18 +443,12 @@ public class PBFTProtocol extends GenericProtocol {
 			int prepareMessagesReceived = 0;
 			try {
 				int hash = msg.getBatchKey().hashCode();
-				if (mb.containsMessage(hash)) {
-					prepareMessagesReceived = mb.addPrepareMessage(hash, from);
-				}
-				else {
-					logger.warn("Received a prepare message for an unknown operation: " + msg);
-					return;
-				}
+				prepareMessagesReceived = mb.addPrepareMessage(hash, from);
 			} catch (RuntimeException e){
 				logger.warn("Received a unknown prepare message: " + msg + mb.getValues(msg.getBatchKey().hashCode()));
 				return;
 			}
-			if (prepareMessagesReceived == 2 * failureNumber + 1) {
+			if (prepareMessagesReceived >= 2 * failureNumber + 1) {
 				CommitMessage commitMsg = new CommitMessage(msg.getBatchKey(), cryptoName);
 				try {
 					commitMsg.signMessage(privKey);
@@ -464,7 +456,7 @@ public class PBFTProtocol extends GenericProtocol {
 						| InvalidSerializerException e) {
 					e.printStackTrace();
 				}
-				view.getView().forEach(node -> {
+				view.getView().forEach(node -> {	
 					if (!node.equals(self)){
 						sendMessage(commitMsg, node);
 					} else {
@@ -479,10 +471,10 @@ public class PBFTProtocol extends GenericProtocol {
 
 	private void uponCommitMessage(CommitMessage msg, Host from, short sourceProto, int channel){
 
-		if (isInViewChange) {
-			logger.warn("View change in progress. Message rejected.");
-			return;
-		}
+		// if (isInViewChange) {
+		// 	logger.warn("View change in progress. Message rejected.");
+		// 	return;
+		// }
 
 		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN() < currentSeqN){
 			if (msg.getBatchKey().getViewNumber() != view.getViewNumber())
@@ -519,17 +511,26 @@ public class PBFTProtocol extends GenericProtocol {
 			if (commitMessagesReceived == failureNumber + 1) {
 				byte[] block = opsMap.getOp(msg.getBatchKey().getOpsHash());
 				try {
-					CommittedNotification commitNotificationMsg = new CommittedNotification(block, SignaturesHelper.generateSignature(block, privKey));
-					triggerNotification(commitNotificationMsg);
-					// mb.clearMessage(msg.getBatchKey().hashCode());
-					// opsMap.clearOp(msg.getBatchKey().getOpsHash());
-					// if (view.isLeader(self)) {
-					// 	cancelTimer(noOpTimer);
-                    // 	noOpTimer = setupTimer(NoOpTimer.instance, NOOP_SEND_INTERVAL);
-					// };
-				} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException e) {
-					logger.error("Error signing committed notification message: " + e.getMessage());
-					e.printStackTrace();
+					UUID.fromString(new String(block));
+					// send a view change notification to the blockchain
+					view = new View(view.getView(), view.getViewNumber()+1);
+					ViewChange viewChange = new ViewChange(this.view, currentSeqN);
+					triggerNotification(viewChange);
+				}
+				catch (IllegalArgumentException e){
+					try {
+						CommittedNotification commitNotificationMsg = new CommittedNotification(block, SignaturesHelper.generateSignature(block, privKey));
+						triggerNotification(commitNotificationMsg);
+						// mb.clearMessage(msg.getBatchKey().hashCode());
+						// opsMap.clearOp(msg.getBatchKey().getOpsHash());
+						// if (view.isLeader(self)) {
+						// 	cancelTimer(noOpTimer);
+						// 	noOpTimer = setupTimer(NoOpTimer.instance, NOOP_SEND_INTERVAL);
+						// };
+					} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException f) {
+						logger.error("Error signing committed notification message: " + e.getMessage());
+						e.printStackTrace();
+					}
 				}
 			}
 		}
