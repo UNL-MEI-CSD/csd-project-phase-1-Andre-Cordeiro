@@ -2,10 +2,12 @@ package blockchain;
 
 import java.io.IOException;
 import java.net.UnknownHostException;
+import java.security.InvalidKeyException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
+import java.security.SignatureException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.util.HashMap;
@@ -322,8 +324,14 @@ public class BlockChainProtocol extends GenericProtocol {
 		logger.info("Leader suspect timer expired for request " + t.getRequestID());
 		this.unhandledRequestsMessages.remove(t.getRequestID());
 
-		SuspectLeader suspectLeader = new SuspectLeader(t.getRequestID());
-		sendRequest(suspectLeader, PBFTProtocol.PROTO_ID);
+		byte[] signature;
+		try {
+			signature = SignaturesHelper.generateSignature(t.getRequestID().toString().getBytes(), this.key);
+			SuspectLeader suspectLeader = new SuspectLeader(t.getRequestID(), signature);
+			sendRequest(suspectLeader, PBFTProtocol.PROTO_ID);
+		} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException e) {
+			e.printStackTrace();
+		}
 		
 	}
 	

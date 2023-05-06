@@ -6,7 +6,6 @@ import java.nio.charset.StandardCharsets;
 import io.netty.buffer.ByteBuf;
 import pt.unl.fct.di.novasys.babel.generic.signed.SignedMessageSerializer;
 import pt.unl.fct.di.novasys.babel.generic.signed.SignedProtoMessage;
-import useless.SeqN;
 import utils.MessageBatch.MessageBatchKey;
 
 public class PrePrepareMessage extends SignedProtoMessage {
@@ -29,7 +28,7 @@ public class PrePrepareMessage extends SignedProtoMessage {
 		@Override
 		public void serializeBody(PrePrepareMessage signedProtoMessage, ByteBuf out) throws IOException {
 			out.writeInt(signedProtoMessage.batchKey.getOpsHash());
-			signedProtoMessage.batchKey.getSeqN().serialize(out);
+			out.writeInt(signedProtoMessage.batchKey.getSeqN());
 			out.writeInt(signedProtoMessage.batchKey.getViewNumber());
 			out.writeInt(signedProtoMessage.operation.length);
 			out.writeBytes(signedProtoMessage.operation);
@@ -40,7 +39,7 @@ public class PrePrepareMessage extends SignedProtoMessage {
 
 		@Override
 		public PrePrepareMessage deserializeBody(ByteBuf in) throws IOException {
-			MessageBatchKey batchKey = new MessageBatchKey(in.readInt(), SeqN.deserialize(in), in.readInt());
+			MessageBatchKey batchKey = new MessageBatchKey(in.readInt(), in.readInt(), in.readInt());
 			byte[] operation = new byte[in.readInt()];
 			in.readBytes(operation);
 			String cryptoName = in.readCharSequence(in.readableBytes(), StandardCharsets.UTF_8).toString();

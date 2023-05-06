@@ -159,7 +159,7 @@ public class PBFTProtocol extends GenericProtocol {
 		// Message Serializers
 		registerMessageSerializer(peerChannel, PrePrepareMessage.MESSAGE_ID, PrePrepareMessage.serializer);
 		registerMessageSerializer(peerChannel, PrepareMessage.MESSAGE_ID, PrepareMessage.serializer);
-		// registerMessageSerializer(peerChannel, CommitMessage.MESSAGE_ID, CommitMessage.serializer);
+		registerMessageSerializer(peerChannel, CommitMessage.MESSAGE_ID, CommitMessage.serializer);
 		// registerMessageSerializer(peerChannel, ViewChangeMessage.MESSAGE_ID, ViewChangeMessage.serializer);
 		// registerMessageSerializer(peerChannel, NewViewMessage.MESSAGE_ID, NewViewMessage.serializer);
 
@@ -267,6 +267,17 @@ public class PBFTProtocol extends GenericProtocol {
 			logger.warn("View change in progress. Request rejected.");
 			return;
 		}
+
+		//check if the signature is valid
+		try {
+			if (!SignaturesHelper.checkSignature(req.getBlock(), req.getSignature(), pubKey)){
+				logger.warn("Request received :" + req + "has an invalid signature");
+				return;
+			}
+		} catch (InvalidKeyException | SignatureException | NoSuchAlgorithmException e) {
+			e.printStackTrace();
+		}
+
 		//check if the node is the leader
 		if (view.isLeader(self)){
 
@@ -309,8 +320,52 @@ public class PBFTProtocol extends GenericProtocol {
 	/* --------------------------------------- Suspect Leader Request Handler ----------------------------------- */
 
 	private void uponSuspectLeader(SuspectLeader req, int channel) {
-		logger.info("Received suspect leader request: " + req);
+
+		//check if the signature is valid
+		try {
+			if (!SignaturesHelper.checkSignature(req.getPendingRequestID().toString().getBytes(), req.getSignature(), pubKey)){
+				logger.warn("Request received :" + req + "has an invalid signature");
+				return;
+			}
+		} catch (InvalidKeyException | SignatureException | NoSuchAlgorithmException e) {
+			e.printStackTrace();
+		}
+
 		// make a standard agreement but with the operation of suspect leader
+		isInViewChange = true;
+		
+		//Create a normal agreement for the suspect leader with skiping the pre-prepare phase
+		OpsMapKey opsMapKey = new OpsMapKey(req.getTimestamp(), req.hashCode());
+		if (opsMap.containsOp(opsMapKey.hashCode())){
+			logger.warn("Request received :" + req + "is a duplicate");
+			return;
+		} else {
+			opsMap.addOp(opsMapKey.hashCode(), req.getPendingRequestID().toString().getBytes());
+		}
+		currentSeqN = currentSeqN++;
+		int operationHash = opsMapKey.hashCode();
+		MessageBatchKey mbKey = new MessageBatchKey(operationHash, currentSeqN, view.getViewNumber());
+		PrepareMessage prepareMsg = new PrepareMessage(mbKey,cryptoName);
+
+		//sign the message
+		try {
+			prepareMsg.signMessage(privKey);
+		} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException
+				| InvalidSerializerException e) {
+			e.printStackTrace();
+		}
+
+		//send the message to all the nodes
+		view.getView().forEach(node -> {	
+			if (!node.equals(self)){
+				sendMessage(prepareMsg, node);
+			} else {
+				mb.addMessage(mbKey.hashCode());
+				mb.addPrepareMessage(operationHash, self);
+			}
+		});
+		
+
 		
 	}
 
@@ -349,7 +404,7 @@ public class PBFTProtocol extends GenericProtocol {
 			}
 			
 			//send a prepare message to all nodes in the view
-			PrepareMessage prepareMsg = new PrepareMessage( msg.getBatchKey(), 0 , cryptoName );
+			PrepareMessage prepareMsg = new PrepareMessage( msg.getBatchKey(), cryptoName );
 			try {
 				prepareMsg.signMessage(privKey);
 			} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException
@@ -402,7 +457,7 @@ public class PBFTProtocol extends GenericProtocol {
 				return;
 			}
 			if (prepareMessagesReceived == 2 * failureNumber + 1) {
-				CommitMessage commitMsg = new CommitMessage(msg.getBatchKey(), 0, cryptoName);
+				CommitMessage commitMsg = new CommitMessage(msg.getBatchKey(), cryptoName);
 				try {
 					commitMsg.signMessage(privKey);
 				} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException
