@@ -6,7 +6,7 @@ import java.nio.charset.StandardCharsets;
 import io.netty.buffer.ByteBuf;
 import pt.unl.fct.di.novasys.babel.generic.signed.SignedMessageSerializer;
 import pt.unl.fct.di.novasys.babel.generic.signed.SignedProtoMessage;
-import utils.SeqN;
+import useless.SeqN;
 import utils.MessageBatch.MessageBatchKey;
 
 public class PrePrepareMessage extends SignedProtoMessage {

@@ -18,14 +18,13 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import consensus.messages.CommitMessage;
-import consensus.messages.NewViewMessage;
 import consensus.messages.PrePrepareMessage;
 import consensus.messages.PrepareMessage;
-import consensus.messages.ViewChangeMessage;
 import consensus.notifications.CommittedNotification;
 import consensus.notifications.InitialNotification;
 import consensus.notifications.ViewChange;
 import consensus.requests.ProposeRequest;
+import consensus.requests.SuspectLeader;
 import consensus.timers.ReconnectTimer;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
@@ -42,7 +41,6 @@ import pt.unl.fct.di.novasys.channel.tcp.events.OutConnectionFailed;
 import pt.unl.fct.di.novasys.channel.tcp.events.OutConnectionUp;
 import pt.unl.fct.di.novasys.network.data.Host;
 import utils.Crypto;
-import utils.SeqN;
 import utils.SignaturesHelper;
 import utils.View;
 import utils.MessageBatch.MessageBatch;
@@ -79,8 +77,8 @@ public class PBFTProtocol extends GenericProtocol {
 	public PublicKey pubKey;
 
 	//Leadership
-	private SeqN currentSeqN;
-	private SeqN highestSeqN;
+	private int currentSeqN;
+	private int highestSeqN;
 	
 	//View
 	private Host self;
@@ -113,7 +111,7 @@ public class PBFTProtocol extends GenericProtocol {
 
 		failureNumber = (view.size() - 1) / 3;
 
-		currentSeqN = new SeqN(0, view.getLeader());
+		currentSeqN = 0;
 		highestSeqN = currentSeqN;
 
 		mb = new MessageBatch();
@@ -148,6 +146,7 @@ public class PBFTProtocol extends GenericProtocol {
 
 		// Request Handlers
 		registerRequestHandler( ProposeRequest.REQUEST_ID, this::uponProposeRequest);
+		registerRequestHandler( SuspectLeader.REQUEST_ID, this::uponSuspectLeader);
 
 
 		// Message Handlers
@@ -269,7 +268,7 @@ public class PBFTProtocol extends GenericProtocol {
 			return;
 		}
 		//check if the node is the leader
-		if (currentSeqN.getNode().equals(self)){
+		if (view.isLeader(self)){
 
 			OpsMapKey opsMapKey = new OpsMapKey(req.getTimestamp(), req.hashCode());
 			if (opsMap.containsOp(opsMapKey.hashCode())){
@@ -277,7 +276,7 @@ public class PBFTProtocol extends GenericProtocol {
 				return;
 			}
 
-			currentSeqN = new SeqN(currentSeqN.getCounter()+1, self);
+			currentSeqN = currentSeqN++;
 			int operationHash = opsMapKey.hashCode();
 			MessageBatchKey mbKey = new MessageBatchKey(operationHash, currentSeqN, view.getViewNumber());
 			PrePrepareMessage prePrepareMsg = new PrePrepareMessage(mbKey,req.getBlock(),cryptoName);
@@ -306,6 +305,15 @@ public class PBFTProtocol extends GenericProtocol {
 
 	}
 
+
+	/* --------------------------------------- Suspect Leader Request Handler ----------------------------------- */
+
+	private void uponSuspectLeader(SuspectLeader req, int channel) {
+		logger.info("Received suspect leader request: " + req);
+		// make a standard agreement but with the operation of suspect leader
+		
+	}
+
 	/*
 	 * ------------------------------------------------------------------------------------------------------
 	 * 											Message Handlers
@@ -321,7 +329,7 @@ public class PBFTProtocol extends GenericProtocol {
 			return;
 		}
 		
-		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN().lesserThan(currentSeqN)){
+		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN() < currentSeqN){
 			if (msg.getBatchKey().getViewNumber() != view.getViewNumber())
 				logger.warn("Received a pre-prepare message with an invalid view number: " + msg);
 			else {
@@ -369,7 +377,7 @@ public class PBFTProtocol extends GenericProtocol {
 			return;
 		}
 
-		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN().lesserThan(currentSeqN)){
+		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN() < currentSeqN){
 			if (msg.getBatchKey().getViewNumber() != view.getViewNumber())
 				logger.warn("Received a prepare message with an invalid view number: " + msg);
 			else {
@@ -421,7 +429,7 @@ public class PBFTProtocol extends GenericProtocol {
 			return;
 		}
 
-		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN().lesserThan(currentSeqN)){
+		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN() < currentSeqN){
 			if (msg.getBatchKey().getViewNumber() != view.getViewNumber())
 				logger.warn("Received a commit message with an invalid view number: " + msg);
 			else {
@@ -432,11 +440,11 @@ public class PBFTProtocol extends GenericProtocol {
 
 		if (checkValidMessage(msg, from)) {
 
-			if (currentSeqN.lesserThan(highestSeqN)) {
+			if (currentSeqN < highestSeqN) {
 				logger.warn("Received a commit message for a lower sequence number: " + msg);
 				return;
-			} else if (currentSeqN.greaterThan(highestSeqN)) {
-				newHighestSeqN();
+			} else if (currentSeqN > highestSeqN) {
+				newHighestSeqN(currentSeqN);
 			}
 			
 			int commitMessagesReceived = 0;
@@ -599,7 +607,7 @@ public class PBFTProtocol extends GenericProtocol {
 
 	// ------------------------- Auxiliary functions ------------------------- //
 
-	private void newHighestSeqN(){
-		highestSeqN = new SeqN(currentSeqN.getCounter(), currentSeqN.getNode());
+	private void newHighestSeqN(int seqN){
+		highestSeqN = seqN;
 	}
 }

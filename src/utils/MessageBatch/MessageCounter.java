@@ -3,7 +3,6 @@ package utils.MessageBatch;
 import java.util.LinkedList;
 import java.util.List;
 
-import pt.unl.fct.di.novasys.babel.generic.ProtoMessage;
 import pt.unl.fct.di.novasys.network.data.Host;
 
 public class MessageCounter {

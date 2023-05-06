@@ -1,4 +1,4 @@
-package consensus.messages;
+package useless;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

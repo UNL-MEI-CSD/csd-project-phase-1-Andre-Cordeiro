@@ -28,6 +28,7 @@ import consensus.notifications.CommittedNotification;
 import consensus.notifications.InitialNotification;
 import consensus.notifications.ViewChange;
 import consensus.requests.ProposeRequest;
+import consensus.requests.SuspectLeader;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
 import pt.unl.fct.di.novasys.babel.generic.ProtoMessage;
@@ -179,14 +180,14 @@ public class BlockChainProtocol extends GenericProtocol {
 		// get the client request from the block
 		ClientRequest req = ClientRequest.fromBytes(cn.getBlock());
 		// cancel the timer for this request
-		if (pendingRequestsTimers.containsKey(req.getRequestId())) {
-			cancelTimer(pendingRequestsTimers.get(req.getRequestId()));
-			pendingRequestsTimers.remove(req.getRequestId());
-		}
-		// remove the list of unhandled requests
-		if (unhandledRequestsMessages.containsKey(req.getRequestId())) {
-			unhandledRequestsMessages.remove(req.getRequestId());
-		}
+		// if (pendingRequestsTimers.containsKey(req.getRequestId())) {
+		// 	cancelTimer(pendingRequestsTimers.get(req.getRequestId()));
+		// 	pendingRequestsTimers.remove(req.getRequestId());
+		// }
+		// // remove the list of unhandled requests
+		// if (unhandledRequestsMessages.containsKey(req.getRequestId())) {
+		// 	unhandledRequestsMessages.remove(req.getRequestId());
+		// }
 		
 	}
 
@@ -234,42 +235,44 @@ public class BlockChainProtocol extends GenericProtocol {
 		} else {
 			logger.warn("Received a RedirectClientRequestMessage without being the leader");
 		}
+
 	}
     
 	// ------------------------------------------ ClientRequestUnhandledMessage ------------------------------------------*/
 
 	private void handleClientRequestUnhandledMessage(ClientRequestUnhandledMessage msg, Host from, short sourceProto, int channel) {
 		
-		if (this.pendingRequestsTimers.containsKey(msg.getPendingRequestID())) {
-			// Stop the timer for this request
-			cancelTimer(this.pendingRequestsTimers.get(msg.getPendingRequestID()));
-			this.pendingRequestsTimers.remove(msg.getPendingRequestID());
-		} else {
-			logger.warn("Received a ClientRequestUnhandledMessage for a request that is not pending from: " + from);
-		}
 
 		// Put the host in the list of hosts that have sent a ClientRequestUnhandledMessage
 		if (!this.unhandledRequestsMessages.containsKey(msg.getPendingRequestID())) {
 			this.unhandledRequestsMessages.put(msg.getPendingRequestID(), new LinkedList<Host>());
-			this.unhandledRequestsMessages.get(msg.getPendingRequestID()).add(from);
+			this.unhandledRequestsMessages.get(msg.getPendingRequestID()).add(self);
+			if (!self.equals(from)){
+				this.unhandledRequestsMessages.get(msg.getPendingRequestID()).add(from);
+			}
+			// resend it to everyone
+			view.getView().forEach(host -> {
+				if (!host.equals(from) && !host.equals(this.self)) {
+					sendMessage(msg, host);
+				}
+			});
 		} else {
 			if (!this.unhandledRequestsMessages.get(msg.getPendingRequestID()).contains(from)) {
 				this.unhandledRequestsMessages.get(msg.getPendingRequestID()).add(from);
 				if (this.unhandledRequestsMessages.get(msg.getPendingRequestID()).size() == 2 * this.f + 1) {
 
-					//Clear the list of hosts that have sent a ClientRequestUnhandledMessage
-					this.unhandledRequestsMessages.remove(msg.getPendingRequestID());
-
 					// We have received enough ClientRequestUnhandledMessage to assume that the Leader had it
 					// We can now start a last chance timer
 					LeaderSuspectTimer timer = new LeaderSuspectTimer(msg.getPendingRequestID());
 					//Put the timer in the hashmap of timers
+					if (this.pendingRequestsTimers.containsKey(msg.getPendingRequestID())) {
+						cancelTimer(this.pendingRequestsTimers.get(msg.getPendingRequestID()));
+						this.pendingRequestsTimers.remove(msg.getPendingRequestID());
+					}
 					this.pendingRequestsTimers.put(msg.getPendingRequestID(), setupTimer(timer, leaderTimeout));
 					
 				}
-			} else {
-				logger.warn("Received a ClientRequestUnhandledMessage from a host that has already sent one");
-			}
+			} 
 		}
 	}
 
@@ -298,21 +301,30 @@ public class BlockChainProtocol extends GenericProtocol {
 			System.exit(1); //Catastrophic failure!!!
 		}
 
-		//Send the message to all replicas
-		view.getView().forEach(node -> {
-			if (!node.equals(self)){
-				sendMessage(msg, node);
-			} else {
-				handleClientRequestUnhandledMessage(msg, self, (short) 0, 0);
-			}
-		});
+		if (!this.unhandledRequestsMessages.containsKey(t.getPendingRequestID())) {
+			// send it to everyone
+			view.getView().forEach(host -> {
+				if (!host.equals(self)) {
+					sendMessage(msg, host);
+				} else {
+					handleClientRequestUnhandledMessage(msg, self, (short) 0, 0);
+				}
+			});
+		} else {
+			// cancel the timer
+			cancelTimer(timerId);
+		}
 	}
 	
 	public void handleLeaderSuspectTimer(LeaderSuspectTimer t, long timerId) {
 
 		//Send a StartViewChange message to his PBFT protocol
 		logger.info("Leader suspect timer expired for request " + t.getRequestID());
+		this.unhandledRequestsMessages.remove(t.getRequestID());
 
+		SuspectLeader suspectLeader = new SuspectLeader(t.getRequestID());
+		sendRequest(suspectLeader, PBFTProtocol.PROTO_ID);
+		
 	}
 	
 	/* ----------------------------------------------- ------------- ------------------------------------------ */

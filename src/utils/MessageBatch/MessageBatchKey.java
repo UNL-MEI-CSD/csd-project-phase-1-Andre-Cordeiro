@@ -1,14 +1,12 @@
 package utils.MessageBatch;
 
-import utils.SeqN;
-
 public class MessageBatchKey {
     
     private final int opsHash;
-    private SeqN seqN;
+    private int seqN;
     private int viewNumber;
 
-    public MessageBatchKey(int opsHash, SeqN seqN, int viewNumber) {
+    public MessageBatchKey(int opsHash, int seqN, int viewNumber) {
         this.opsHash = opsHash;
         this.seqN = seqN;
         this.viewNumber = viewNumber;
@@ -18,7 +16,7 @@ public class MessageBatchKey {
         return opsHash;
     }
 
-    public SeqN getSeqN() {
+    public int getSeqN() {
         return seqN;
     }
 
@@ -27,7 +25,7 @@ public class MessageBatchKey {
     }
 
     public int hashCode() {
-        return opsHash + seqN.hashCode() + viewNumber;
+        return opsHash + seqN + viewNumber;
     }
 
     @Override
