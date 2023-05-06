@@ -32,6 +32,7 @@ public class PrePrepareMessage extends SignedProtoMessage {
 			signedProtoMessage.batchKey.getSeqN().serialize(out);
 			out.writeInt(signedProtoMessage.batchKey.getViewNumber());
 			out.writeInt(signedProtoMessage.operation.length);
+			out.writeBytes(signedProtoMessage.operation);
 			out.writeCharSequence(signedProtoMessage.cryptoName, StandardCharsets.UTF_8);
 		}
 
@@ -41,6 +42,7 @@ public class PrePrepareMessage extends SignedProtoMessage {
 		public PrePrepareMessage deserializeBody(ByteBuf in) throws IOException {
 			MessageBatchKey batchKey = new MessageBatchKey(in.readInt(), SeqN.deserialize(in), in.readInt());
 			byte[] operation = new byte[in.readInt()];
+			in.readBytes(operation);
 			String cryptoName = in.readCharSequence(in.readableBytes(), StandardCharsets.UTF_8).toString();
 			return new PrePrepareMessage(batchKey,operation,cryptoName);
 		}

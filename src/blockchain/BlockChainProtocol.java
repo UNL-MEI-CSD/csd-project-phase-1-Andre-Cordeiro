@@ -8,7 +8,11 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.UUID;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -45,17 +49,26 @@ public class BlockChainProtocol extends GenericProtocol {
 	
 	private static final Logger logger = LogManager.getLogger(BlockChainProtocol.class);
 	
+	//Crypto
 	private String cryptoName;
 	private KeyStore truststore;
 	private PrivateKey key;
-	
+
+	//Timers
 	private final long checkRequestsPeriod;
 	private final long leaderTimeout;
  	
+	//State
 	private Host self;
 	private int viewNumber;
 	private View view;
 	private boolean leader;
+	private int f;
+	// a HashMap to store the timers for the pending requests
+	private Map<UUID, Long> pendingRequestsTimers;
+	// a HashMap to count the host that have send a unhandled request
+	private Map<UUID, List<Host>> unhandledRequestsMessages;
+	
 
 	
 	public BlockChainProtocol(Properties props) throws NumberFormatException, UnknownHostException {
@@ -124,7 +137,7 @@ public class BlockChainProtocol extends GenericProtocol {
 
 				//Start a timer for this request
 				CheckUnhandledRequestsPeriodicTimer timer = new CheckUnhandledRequestsPeriodicTimer(req.getRequestId());
-				setupTimer(timer, checkRequestsPeriod);
+				pendingRequestsTimers.put(req.getRequestId(), setupTimer(timer, checkRequestsPeriod));
 
 			} catch (Exception e) {
 				e.printStackTrace();
@@ -148,6 +161,7 @@ public class BlockChainProtocol extends GenericProtocol {
 
 		this.viewNumber = vc.getViewNumber();
 		this.view = new View(vc.getView(), vc.getViewNumber());
+		this.f = (this.view.getView().size() - 1)/3;
 		
 		this.leader = this.view.getLeader().equals(this.self);
 		
@@ -156,6 +170,17 @@ public class BlockChainProtocol extends GenericProtocol {
 	public void handleCommittedNotification(CommittedNotification cn, short from) {
 		//TODO: write this handler
 		logger.info("Received a commit notification with id: " + cn + " from: " + from);
+
+		// get the client request from the block
+		ClientRequest req = ClientRequest.fromBytes(cn.getBlock());
+		// cancel the timer for this request
+		cancelTimer(pendingRequestsTimers.get(req.getRequestId()));
+		pendingRequestsTimers.remove(req.getRequestId());
+		// remove the list of unhandled requests
+		if (unhandledRequestsMessages.containsKey(req.getRequestId())) {
+			unhandledRequestsMessages.remove(req.getRequestId());
+		}
+		
 	}
 
 	public void handleInitialNotification(InitialNotification in, short from) {
@@ -207,7 +232,38 @@ public class BlockChainProtocol extends GenericProtocol {
 	// ------------------------------------------ ClientRequestUnhandledMessage ------------------------------------------*/
 
 	private void handleClientRequestUnhandledMessage(ClientRequestUnhandledMessage msg, Host from, short sourceProto, int channel) {
-		logger.info("Received a ClientRequestUnhandledMessage with id: " + msg.getPendingRequestID() + " from: " + from);
+		
+		if (this.pendingRequestsTimers.containsKey(msg.getPendingRequestID())) {
+			// Stop the timer for this request
+			cancelTimer(this.pendingRequestsTimers.get(msg.getPendingRequestID()));
+			this.pendingRequestsTimers.remove(msg.getPendingRequestID());
+		} else {
+			logger.warn("Received a ClientRequestUnhandledMessage for a request that is not pending from: " + from);
+		}
+
+		// Put the host in the list of hosts that have sent a ClientRequestUnhandledMessage
+		if (!this.unhandledRequestsMessages.containsKey(msg.getPendingRequestID())) {
+			this.unhandledRequestsMessages.put(msg.getPendingRequestID(), new LinkedList<Host>());
+			this.unhandledRequestsMessages.get(msg.getPendingRequestID()).add(from);
+		} else {
+			if (!this.unhandledRequestsMessages.get(msg.getPendingRequestID()).contains(from)) {
+				this.unhandledRequestsMessages.get(msg.getPendingRequestID()).add(from);
+				if (this.unhandledRequestsMessages.get(msg.getPendingRequestID()).size() == 2 * this.f + 1) {
+
+					//Clear the list of hosts that have sent a ClientRequestUnhandledMessage
+					this.unhandledRequestsMessages.remove(msg.getPendingRequestID());
+
+					// We have received enough ClientRequestUnhandledMessage to assume that the Leader had it
+					// We can now start a last chance timer
+					LeaderSuspectTimer timer = new LeaderSuspectTimer(msg.getPendingRequestID());
+					//Put the timer in the hashmap of timers
+					this.pendingRequestsTimers.put(msg.getPendingRequestID(), setupTimer(timer, leaderTimeout));
+					
+				}
+			} else {
+				logger.warn("Received a ClientRequestUnhandledMessage from a host that has already sent one");
+			}
+		}
 	}
 
 	// ----------------------------------------------- Fail message handler -----------------------------------------*/
@@ -246,7 +302,9 @@ public class BlockChainProtocol extends GenericProtocol {
 	}
 	
 	public void handleLeaderSuspectTimer(LeaderSuspectTimer t, long timerId) {
-		//When it runs out it means that the leader is suspected to be faulty
+
+		//Send a StartViewChange message to his PBFT protocol
+		logger.info("Leader suspect timer expired for request " + t.getRequestID());
 
 	}
 	

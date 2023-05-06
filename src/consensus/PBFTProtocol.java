@@ -12,8 +12,6 @@ import java.security.PublicKey;
 import java.security.SignatureException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Properties;
 
 import org.apache.logging.log4j.LogManager;
@@ -28,8 +26,6 @@ import consensus.notifications.CommittedNotification;
 import consensus.notifications.InitialNotification;
 import consensus.notifications.ViewChange;
 import consensus.requests.ProposeRequest;
-import consensus.timers.LeaderTimer;
-import consensus.timers.NoOpTimer;
 import consensus.timers.ReconnectTimer;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
@@ -71,12 +67,10 @@ public class PBFTProtocol extends GenericProtocol {
 
 	// Timers
 	private final int RECONNECT_TIME;
-	private final int LEADER_TIMEOUT;
-	private final int NOOP_SEND_INTERVAL;
 
-	private long noOpTimer;
-	private long leaderTimer;
-    private long lastLeaderOp;
+	// private long noOpTimer;
+	// private long leaderTimer;
+    // private long lastLeaderOp;
 
 	// Crypto
 	private String cryptoName;
@@ -93,7 +87,6 @@ public class PBFTProtocol extends GenericProtocol {
 	private View view;
 	private int failureNumber;
 	private boolean isInViewChange;
-	private List<ViewChangeMessage> viewChangeMessagesReceived = new LinkedList<>();
 
 	//State
 	private OpsMap opsMap;
@@ -107,8 +100,6 @@ public class PBFTProtocol extends GenericProtocol {
 				Integer.parseInt(props.getProperty(PORT_KEY)));
 
 		this.RECONNECT_TIME = Integer.parseInt(props.getProperty(RECONNECT_TIME_KEY));
-		this.LEADER_TIMEOUT = Integer.parseInt(props.getProperty(LEADER_TIMEOUT_KEY));
-		this.NOOP_SEND_INTERVAL = LEADER_TIMEOUT / 2;
 		
 		
 		opsMap = new OpsMap();
@@ -173,9 +164,9 @@ public class PBFTProtocol extends GenericProtocol {
 		registerMessageSerializer(peerChannel, NewViewMessage.MESSAGE_ID, NewViewMessage.serializer);
 
 		// Timer Handlers
-		registerTimerHandler(LeaderTimer.TIMER_ID, this::onLeaderTimer);
-        registerTimerHandler(NoOpTimer.TIMER_ID, this::onNoOpTimer);
-        registerTimerHandler(ReconnectTimer.TIMER_ID, this::onReconnectTimer);
+		// registerTimerHandler(LeaderTimer.TIMER_ID, this::onLeaderTimer);
+        // registerTimerHandler(NoOpTimer.TIMER_ID, this::onNoOpTimer);
+        // registerTimerHandler(ReconnectTimer.TIMER_ID, this::onReconnectTimer);
 
 
 		logger.info("Standing by to extablish connections (10s)");
@@ -184,8 +175,7 @@ public class PBFTProtocol extends GenericProtocol {
 		
 		// TODO: Open connections to all nodes in the (initial) view
 		view.getView().forEach(this::openConnection);
-		leaderTimer = setupPeriodicTimer(LeaderTimer.instance, LEADER_TIMEOUT, LEADER_TIMEOUT / 3);
-        lastLeaderOp = System.currentTimeMillis();
+		// leaderTimer = setupPeriodicTimer(LeaderTimer.instance, LEADER_TIMEOUT, LEADER_TIMEOUT / 3);
 
 		triggerNotification(new InitialNotification(self, peerChannel));
 		
@@ -195,24 +185,24 @@ public class PBFTProtocol extends GenericProtocol {
 
 	/* --------------------------------------- Timer Handlers ----------------------------------- */
 
-	private void onLeaderTimer(LeaderTimer timer, long timerId) {
-        if (!view.isLeader(self) && (System.currentTimeMillis() - lastLeaderOp > LEADER_TIMEOUT)){
-            logger.error("Leader timeout expired. Triggering view change.");
-			//startViewChange();
-			//TODO: Implement correct view change
-		}
-    }
+	// private void onLeaderTimer(LeaderTimer timer, long timerId) {
+    //     if (!view.isLeader(self) && (System.currentTimeMillis() - lastLeaderOp > LEADER_TIMEOUT)){
+    //         logger.error("Leader timeout expired. Triggering view change.");
+	// 		//startViewChange();
+	// 		//TODO: Implement correct view change
+	// 	}
+    // }
 
-	private void onNoOpTimer(NoOpTimer timer, long timerId) {
-		if (currentSeqN.getNode().equals(self)) {
-			logger.warn("Sending NOOP");
-			noOpTimer = setupPeriodicTimer(NoOpTimer.instance, NOOP_SEND_INTERVAL, NOOP_SEND_INTERVAL);
-		}
-	}
+	// private void onNoOpTimer(NoOpTimer timer, long timerId) {
+	// 	if (currentSeqN.getNode().equals(self)) {
+	// 		logger.warn("Sending NOOP");
+	// 		noOpTimer = setupPeriodicTimer(NoOpTimer.instance, NOOP_SEND_INTERVAL, NOOP_SEND_INTERVAL);
+	// 	}
+	// }
 
-	private void onReconnectTimer(ReconnectTimer timer, long timerId) {
-		openConnection(timer.getHost());
-	}
+	// private void onReconnectTimer(ReconnectTimer timer, long timerId) {
+	// 	openConnection(timer.getHost());
+	// }
 
 
 	// --------------------------------------- View Change Handlers -----------------------------------
@@ -365,7 +355,7 @@ public class PBFTProtocol extends GenericProtocol {
 					mb.addPrepareMessage(msg.getBatchKey().hashCode());
 				}
 			});
-			lastLeaderOp = System.currentTimeMillis();
+			// lastLeaderOp = System.currentTimeMillis();
 		}
 	}
 
