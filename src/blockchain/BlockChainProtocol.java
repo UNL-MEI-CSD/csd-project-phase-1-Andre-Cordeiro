@@ -15,6 +15,7 @@ import java.util.Properties;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import blockchain.messages.ClientRequestUnhandledMessage;
 import blockchain.requests.ClientRequest;
 import blockchain.requests.RedirectClientRequest;
 import blockchain.timers.CheckUnhandledRequestsPeriodicTimer;
@@ -26,9 +27,13 @@ import consensus.notifications.ViewChange;
 import consensus.requests.ProposeRequest;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
+import pt.unl.fct.di.novasys.babel.generic.ProtoMessage;
+import pt.unl.fct.di.novasys.channel.tcp.MultithreadedTCPChannel;
+import pt.unl.fct.di.novasys.channel.tcp.TCPChannel;
 import pt.unl.fct.di.novasys.network.data.Host;
 import utils.Crypto;
 import utils.SignaturesHelper;
+import utils.View;
 
 public class BlockChainProtocol extends GenericProtocol {
 
@@ -53,8 +58,9 @@ public class BlockChainProtocol extends GenericProtocol {
  	
 	private Host self;
 	private int viewNumber;
-	private final List<Host> view;
+	private View view;
 	private boolean leader;
+
 	
 	public BlockChainProtocol(Properties props) throws NumberFormatException, UnknownHostException {
 		super(BlockChainProtocol.PROTO_NAME, BlockChainProtocol.PROTO_ID);
@@ -66,7 +72,7 @@ public class BlockChainProtocol extends GenericProtocol {
 		// 		Integer.parseInt(props.getProperty(PORT_KEY)));
 		
 		viewNumber = 0;
-		view = new LinkedList<>();
+		view = new View(viewNumber);
 		
 		//Read timers and timeouts configurations
 		checkRequestsPeriod = Long.parseLong(props.getProperty(PERIOD_CHECK_REQUESTS));
@@ -85,19 +91,24 @@ public class BlockChainProtocol extends GenericProtocol {
 			e.printStackTrace();
 		}
 
+		
+
 		// registerMessageHandler(peerChannel, RedirectClientRequestMessage.MSG_ID, this::handleRedirectClientRequestMessage);
 
+		// Request Handlers
 		registerRequestHandler(ClientRequest.REQUEST_ID, this::handleClientRequest);
 		registerRequestHandler(RedirectClientRequest.REQUEST_ID, this::handleRedirectClientRequest);
 		
+		// Timer Handlers
 		registerTimerHandler(CheckUnhandledRequestsPeriodicTimer.TIMER_ID, this::handleCheckUnhandledRequestsPeriodicTimer);
 		registerTimerHandler(LeaderSuspectTimer.TIMER_ID, this::handleLeaderSuspectTimer);
 		
+		// Notification Handlers
 		subscribeNotification(ViewChange.NOTIFICATION_ID, this::handleViewChangeNotification);
 		subscribeNotification(CommittedNotification.NOTIFICATION_ID, this::handleCommittedNotification);
 		subscribeNotification(InitialNotification.NOTIFICATION_ID, this::handleInitialNotification);
-		
-		setupPeriodicTimer(new CheckUnhandledRequestsPeriodicTimer(), checkRequestsPeriod, checkRequestsPeriod);
+
+		// setupPeriodicTimer(new CheckUnhandledRequestsPeriodicTimer(), checkRequestsPeriod, checkRequestsPeriod);
 	}
 	
 	
@@ -118,6 +129,11 @@ public class BlockChainProtocol extends GenericProtocol {
 				byte[] signature = SignaturesHelper.generateSignature(request, this.key);
 				
 				sendRequest(new ProposeRequest(request, signature), PBFTProtocol.PROTO_ID);
+
+				//Start a timer for this request
+				CheckUnhandledRequestsPeriodicTimer timer = new CheckUnhandledRequestsPeriodicTimer(req.getRequestId());
+				setupTimer(timer, checkRequestsPeriod);
+
 			} catch (Exception e) {
 				e.printStackTrace();
 				System.exit(1); //Catastrophic failure!!!
@@ -163,14 +179,11 @@ public class BlockChainProtocol extends GenericProtocol {
 		logger.info("New view received (" + vc.getViewNumber() + ")");
 		
 		//TODO: Should maybe validate this ViewChange :)
-		
+
 		this.viewNumber = vc.getViewNumber();
-		this.view.clear();
-		for(int i = 0; i < vc.getView().size(); i++) {
-			this.view.add(vc.getView().get(i));
-		}
-		//TODO: Compute correctly who is the leader and not assume that you are always the leader.
-		this.leader = (this.view.get(this.viewNumber%this.view.size()).equals(self));
+		this.view = new View(vc.getView(), vc.getViewNumber());
+		
+		this.leader = this.view.getLeader().equals(this.self);
 		
 	}
 	
@@ -182,14 +195,38 @@ public class BlockChainProtocol extends GenericProtocol {
 	public void handleInitialNotification(InitialNotification in, short from) {
 
 		this.self = in.getSelf();
+		
+		int peerChannel = in.getPeerChannel();
+		registerSharedChannel(peerChannel);
 
+		// Message Handlers
+		try {
+			registerMessageHandler(peerChannel, ClientRequestUnhandledMessage.MESSAGE_ID, this::handleClientRequestUnhandledMessage, this::uponMessageFailed);
+		} catch (HandlerRegistrationException e) {
+			e.printStackTrace();
+		}
+
+		// Message Serializers
+		registerMessageSerializer(peerChannel, ClientRequestUnhandledMessage.MESSAGE_ID, ClientRequestUnhandledMessage.serializer);
+		
 	}
 		
 	/* ----------------------------------------------- ------------- ------------------------------------------ */
     /* ---------------------------------------------- MESSAGE HANDLER ----------------------------------------- */
     /* ----------------------------------------------- ------------- ------------------------------------------ */
     
-	//TODO: add message handlers (and register them)
+	// ------------------------------------------ ClientRequestUnhandledMessage ------------------------------------------*/
+
+	private void handleClientRequestUnhandledMessage(ClientRequestUnhandledMessage msg, Host from, short sourceProto, int channel) {
+		logger.info("Received a ClientRequestUnhandledMessage with id: " + msg.getPendingRequestID() + " from: " + from);
+	}
+
+	// ----------------------------------------------- Fail message handler -----------------------------------------*/
+
+	
+	private void uponMessageFailed(ProtoMessage msg, Host from, short sourceProto, int channel){
+		logger.warn("Failed to deliver message " + msg + " from " + from);
+	}
 
 
 	/* ----------------------------------------------- ------------- ------------------------------------------ */
@@ -197,11 +234,31 @@ public class BlockChainProtocol extends GenericProtocol {
     /* ----------------------------------------------- ------------- ------------------------------------------ */
     
 	public void handleCheckUnhandledRequestsPeriodicTimer(CheckUnhandledRequestsPeriodicTimer t, long timerId) {
-		//TODO: write this handler
+
+
+		ClientRequestUnhandledMessage msg = new ClientRequestUnhandledMessage(t.getPendingRequestID());	
+
+		//sign the message
+		try {
+			msg.signMessage(key);
+		} catch (Exception e) {
+			e.printStackTrace();
+			System.exit(1); //Catastrophic failure!!!
+		}
+
+		//Send the message to all replicas
+		view.getView().forEach(node -> {
+			if (!node.equals(self)){
+				sendMessage(msg, node);
+			} else {
+				handleClientRequestUnhandledMessage(msg, self, (short) 0, 0);
+			}
+		});
 	}
 	
 	public void handleLeaderSuspectTimer(LeaderSuspectTimer t, long timerId) {
-		//TODO: write this handler
+		//When it runs out it means that the leader is suspected to be faulty
+
 	}
 	
 	/* ----------------------------------------------- ------------- ------------------------------------------ */
