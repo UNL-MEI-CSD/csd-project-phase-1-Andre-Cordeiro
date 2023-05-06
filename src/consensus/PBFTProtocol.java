@@ -159,9 +159,9 @@ public class PBFTProtocol extends GenericProtocol {
 		// Message Serializers
 		registerMessageSerializer(peerChannel, PrePrepareMessage.MESSAGE_ID, PrePrepareMessage.serializer);
 		registerMessageSerializer(peerChannel, PrepareMessage.MESSAGE_ID, PrepareMessage.serializer);
-		registerMessageSerializer(peerChannel, CommitMessage.MESSAGE_ID, CommitMessage.serializer);
-		registerMessageSerializer(peerChannel, ViewChangeMessage.MESSAGE_ID, ViewChangeMessage.serializer);
-		registerMessageSerializer(peerChannel, NewViewMessage.MESSAGE_ID, NewViewMessage.serializer);
+		// registerMessageSerializer(peerChannel, CommitMessage.MESSAGE_ID, CommitMessage.serializer);
+		// registerMessageSerializer(peerChannel, ViewChangeMessage.MESSAGE_ID, ViewChangeMessage.serializer);
+		// registerMessageSerializer(peerChannel, NewViewMessage.MESSAGE_ID, NewViewMessage.serializer);
 
 		// Timer Handlers
 		// registerTimerHandler(LeaderTimer.TIMER_ID, this::onLeaderTimer);
@@ -577,27 +577,29 @@ public class PBFTProtocol extends GenericProtocol {
 				logger.error("Error checking signature in " + msg.getClass() + " from " + from + ": " + e.getMessage());
 				return false;
 			}
-		} else if (msgObj instanceof ViewChangeMessage){
-			ViewChangeMessage msg = (ViewChangeMessage) msgObj;
-			try{
-				check = msg.checkSignature(truststore.getCertificate(msg.getCryptoName()).getPublicKey());
-			}
-			catch(InvalidFormatException | NoSignaturePresentException | NoSuchAlgorithmException | InvalidKeyException |
-			SignatureException | KeyStoreException e){
-				logger.error("Error checking signature in " + msg.getClass() + " from " + from + ": " + e.getMessage());
-				return false;
-			}
-		} else if (msgObj instanceof NewViewMessage){
-			NewViewMessage msg = (NewViewMessage) msgObj;
-			try{
-				check = msg.checkSignature(truststore.getCertificate(msg.getCryptoName()).getPublicKey());
-			}
-			catch(InvalidFormatException | NoSignaturePresentException | NoSuchAlgorithmException | InvalidKeyException |
-			SignatureException | KeyStoreException e){
-				logger.error("Error checking signature in " + msg.getClass() + " from " + from + ": " + e.getMessage());
-				return false;
-			}
-		} else {
+		} 
+		// else if (msgObj instanceof ViewChangeMessage){
+		// 	ViewChangeMessage msg = (ViewChangeMessage) msgObj;
+		// 	try{
+		// 		check = msg.checkSignature(truststore.getCertificate(msg.getCryptoName()).getPublicKey());
+		// 	}
+		// 	catch(InvalidFormatException | NoSignaturePresentException | NoSuchAlgorithmException | InvalidKeyException |
+		// 	SignatureException | KeyStoreException e){
+		// 		logger.error("Error checking signature in " + msg.getClass() + " from " + from + ": " + e.getMessage());
+		// 		return false;
+		// 	}
+		// } else if (msgObj instanceof NewViewMessage){
+		// 	NewViewMessage msg = (NewViewMessage) msgObj;
+		// 	try{
+		// 		check = msg.checkSignature(truststore.getCertificate(msg.getCryptoName()).getPublicKey());
+		// 	}
+		// 	catch(InvalidFormatException | NoSignaturePresentException | NoSuchAlgorithmException | InvalidKeyException |
+		// 	SignatureException | KeyStoreException e){
+		// 		logger.error("Error checking signature in " + msg.getClass() + " from " + from + ": " + e.getMessage());
+		// 		return false;
+		// 	}
+		// } 
+		else {
 			logger.error("Unknown message type: " + msgObj.getClass());
 			throw new IllegalArgumentException("Message is not valid");
 		}
