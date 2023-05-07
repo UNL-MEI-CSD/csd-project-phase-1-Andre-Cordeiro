@@ -20,6 +20,7 @@ import java.util.UUID;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import blockchain.blockchain.BlockChain;
 import blockchain.messages.ClientRequestUnhandledMessage;
 import blockchain.messages.RedirectClientRequestMessage;
 import blockchain.requests.ClientRequest;
@@ -34,6 +35,7 @@ import consensus.requests.SuspectLeader;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
 import pt.unl.fct.di.novasys.babel.generic.ProtoMessage;
+import pt.unl.fct.di.novasys.babel.generic.signed.SignedProtoMessage;
 import pt.unl.fct.di.novasys.network.data.Host;
 import utils.Crypto;
 import utils.SignaturesHelper;
@@ -73,6 +75,11 @@ public class BlockChainProtocol extends GenericProtocol {
 	private Map<UUID, Long> pendingRequestsTimers;
 	// a HashMap to count the host that have send a unhandled request
 	private Map<UUID, List<Host>> unhandledRequestsMessages;
+
+	//BlockChain
+	private BlockChain blockChain;
+	private int lastBlockNumber; //sequence number equivalent
+	private SignedProtoMessage[] nextTransaction;
 	
 
 	
@@ -84,7 +91,6 @@ public class BlockChainProtocol extends GenericProtocol {
 		//(this should not be interpreted as the unique or canonical solution)
 		// self = new Host(InetAddress.getByName(props.getProperty(ADDRESS_KEY)),
 		// 		Integer.parseInt(props.getProperty(PORT_KEY)));
-		
 		viewNumber = 0;
 		view = new View(viewNumber);
 		waitingForViewChange = false;
@@ -126,7 +132,19 @@ public class BlockChainProtocol extends GenericProtocol {
 
 		// setupPeriodicTimer(new CheckUnhandledRequestsPeriodicTimer(), checkRequestsPeriod, checkRequestsPeriod);
 	}
+
+
+	/* ----------------------------------------------- ------------- ------------------------------------------ */
+	/* ------------------------------------------ Block Creation function ------------------------------------- */
+	/* ----------------------------------------------- ------------- ------------------------------------------ */
 	
+	private void createBlock() {
+
+	}
+
+	private void addTransactionToBlock(SignedProtoMessage transaction) {
+
+	}
 	
 	/* ----------------------------------------------- ------------- ------------------------------------------ */
     /* ---------------------------------------------- REQUEST HANDLER ----------------------------------------- */

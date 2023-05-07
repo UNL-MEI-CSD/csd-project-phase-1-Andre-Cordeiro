@@ -6,7 +6,7 @@ PORTS = $(shell seq 5000 2 $$((($(NBR)-1)*2+5000)))
 
 MEMBERSHIP = $(shell echo $(PORTS) | sed 's/ /,localhost:/g' | sed 's/^/localhost:/')
 
-all: kill clean build info start
+all: kill clean build info start_replica start_client
 	
 build:
 	@echo "${BOLD}${SYELLOW}📦  Building the jar file ${S}"
@@ -18,17 +18,24 @@ info:
 	@echo "${BOLD}${SCYAN}Starting the nodes 🚀 "
 	@echo ""
 
-start:
+start_replica:
 	@for number in $(shell seq 1 $(NBR)); do \
 		echo "${BOLD}${SGREEN}Starting node n°$$number on port $$((5000+($$number-1)*2)) ${S}"; \
 		echo ""; \
 		gnome-terminal --title="Node n°$$number" --geometry=100x30 --working-directory=$(PWD)/deploy -- bash -c "echo '🚀 Starting node n°$$number on port $$((5000+($$number-1)*2)) :'; \
-		java -Dlog4j.configurationFile=log4j2.xml -jar csd2223-proj1.jar base_port=$$((5000+($$number-1)*2)) initial_membership=$(MEMBERSHIP) crypto_name=node$$number; \
+		java -Dlog4j.configurationFile=log4j2.xml -jar csd2223-proj1.jar base_port=$$((5000+($$number-1)*2)) server_port=$$((6000+($$number-1)*2)) initial_membership=$(MEMBERSHIP) crypto_name=node$$number; \
         exec bash;" ;\
 	done
 
 	@echo "${BOLD}${SBLUE}🎉  All nodes are started ${S}"
 
+start_client:
+	@echo "${BOLD}${SBLUE}🎉  Starting the client ${S}"
+	@gnome-terminal --title="Client" --geometry=100x30 --working-directory=$(PWD)/../CSD-Lab6-Client/deploy/ -- bash -c "echo '🚀 Starting the client :'; \
+	java -Dlog4j.configurationFile=log4j2.xml -jar csd2223-client.jar; \
+	exec bash;" ;\
+
+	@echo "${BOLD}${SBLUE}🎉  Client started ${S}"
 
 clean:
 	@echo "${SPURPLE}🧹  Cleaning the project ${S}"
