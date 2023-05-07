@@ -23,6 +23,7 @@ import org.apache.logging.log4j.Logger;
 import blockchain.blockchain.BlockChain;
 import blockchain.messages.ClientRequestUnhandledMessage;
 import blockchain.messages.RedirectClientRequestMessage;
+import blockchain.messages.StartClientRequestSuspectMessage;
 import blockchain.requests.ClientRequest;
 import blockchain.timers.CheckUnhandledRequestsPeriodicTimer;
 import blockchain.timers.LeaderSuspectTimer;
@@ -35,6 +36,9 @@ import consensus.requests.SuspectLeader;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
 import pt.unl.fct.di.novasys.babel.generic.ProtoMessage;
+import pt.unl.fct.di.novasys.babel.generic.signed.InvalidFormatException;
+import pt.unl.fct.di.novasys.babel.generic.signed.InvalidSerializerException;
+import pt.unl.fct.di.novasys.babel.generic.signed.NoSignaturePresentException;
 import pt.unl.fct.di.novasys.babel.generic.signed.SignedProtoMessage;
 import pt.unl.fct.di.novasys.network.data.Host;
 import utils.Crypto;
@@ -153,13 +157,13 @@ public class BlockChainProtocol extends GenericProtocol {
 	public void handleClientRequest(ClientRequest req, short protoID) {
 		
 		if (waitingForViewChange) {
+			if (this.leader) logger.info("Received a ClientRequeest with id: " + req.getRequestId());	
 			return;
 		}
 
 		if(this.leader) {
 			
 			try {
-			logger.info("Received a ClientRequeest with id: " + req.getRequestId());	
 				//TODO: This is a super over simplification we will handle latter
 				//Only one block should be submitted for agreement at a time
 				//Also this assumes that a block only contains a single client request
@@ -174,7 +178,15 @@ public class BlockChainProtocol extends GenericProtocol {
 			}
 		} else {
 			//Redirect the request to the leader
-			RedirectClientRequestMessage msg = new RedirectClientRequestMessage(req);
+			RedirectClientRequestMessage msg = new RedirectClientRequestMessage(req, cryptoName);
+			//sign the message
+			try {
+				msg.signMessage(key);
+			} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException
+					| InvalidSerializerException e) {
+				e.printStackTrace();
+				System.exit(1); //Catastrophic failure!!!
+			}
 			sendMessage(msg, this.view.getLeader());
 		}
 		//Start a timer for this request
@@ -196,9 +208,18 @@ public class BlockChainProtocol extends GenericProtocol {
 		this.f = (this.view.getView().size() - 1)/3;
 		
 		this.leader = this.view.getLeader().equals(this.self);
+		if (this.leader) logger.info("I am the leader: " + this.leader);
+		//handle all unhandled blocks
+		UUID[] reqIds = unhandledRequestsMessages.keySet().toArray(new UUID[0]);
+		for (UUID reqId : reqIds) {
+			handleUnhandledRequest(reqId);
+		}
+		// reset unhandledMessages
+		unhandledRequestsMessages.clear(); 
+		logger.info("View change completed");
 		waitingForViewChange = false;
 	}
-	
+
 	public void handleCommittedNotification(CommittedNotification cn, short from) {
 		
 		if (waitingForViewChange) {
@@ -236,6 +257,7 @@ public class BlockChainProtocol extends GenericProtocol {
 		try {
 			registerMessageHandler(peerChannel, ClientRequestUnhandledMessage.MESSAGE_ID, this::handleClientRequestUnhandledMessage, this::uponMessageFailed);
 			registerMessageHandler(peerChannel, RedirectClientRequestMessage.MESSAGE_ID, this::handleRedirectClientRequestMessage, this::uponMessageFailed);
+			registerMessageHandler(peerChannel, StartClientRequestSuspectMessage.MESSAGE_ID, this::handleStartClientRequestSuspectMessage, this::uponMessageFailed);
 		} catch (HandlerRegistrationException e) {
 			e.printStackTrace();
 		}
@@ -243,6 +265,7 @@ public class BlockChainProtocol extends GenericProtocol {
 		// Message Serializers
 		registerMessageSerializer(peerChannel, ClientRequestUnhandledMessage.MESSAGE_ID, ClientRequestUnhandledMessage.serializer);
 		registerMessageSerializer(peerChannel, RedirectClientRequestMessage.MESSAGE_ID, RedirectClientRequestMessage.serializer);
+		registerMessageSerializer(peerChannel, StartClientRequestSuspectMessage.MESSAGE_ID, StartClientRequestSuspectMessage.serializer);
 		
 	}
 		
@@ -253,6 +276,9 @@ public class BlockChainProtocol extends GenericProtocol {
 	// ------------------------------------------ RedirectClientRequestMessage ------------------------------------------*/
 
 	private void handleRedirectClientRequestMessage(RedirectClientRequestMessage msg, Host from, short sourceProto, int channel) {
+		if (!checkValidMessage(msg, from)){
+			return;
+		}
 		if(this.leader) {
 			
 			try {
@@ -275,41 +301,57 @@ public class BlockChainProtocol extends GenericProtocol {
 	// ------------------------------------------ ClientRequestUnhandledMessage ------------------------------------------*/
 
 	private void handleClientRequestUnhandledMessage(ClientRequestUnhandledMessage msg, Host from, short sourceProto, int channel) {
-		
-		if (waitingForViewChange) {
+
+		if (!checkValidMessage(msg, from)){
 			return;
 		}
-
-		// Put the host in the list of hosts that have sent a ClientRequestUnhandledMessage
-		if (!this.unhandledRequestsMessages.containsKey(msg.getPendingRequestID())) {
-			this.unhandledRequestsMessages.put(msg.getPendingRequestID(), new LinkedList<Host>());
-			this.unhandledRequestsMessages.get(msg.getPendingRequestID()).add(self);
-			if (!self.equals(from)){
-				this.unhandledRequestsMessages.get(msg.getPendingRequestID()).add(from);
+		
+		this.unhandledRequestsMessages.put(msg.getPendingRequestID(), new LinkedList<Host>());
+		this.unhandledRequestsMessages.get(msg.getPendingRequestID()).add(self);
+		// remove the timer for this request
+		if (pendingRequestsTimers.containsKey(msg.getPendingRequestID())) {
+			cancelTimer(pendingRequestsTimers.get(msg.getPendingRequestID()));
+			pendingRequestsTimers.remove(msg.getPendingRequestID());
+			LeaderSuspectTimer timer = new LeaderSuspectTimer(msg.getPendingRequestID(), this.viewNumber);
+			this.pendingRequestsTimers.put(msg.getPendingRequestID(), setupTimer(timer, leaderTimeout));
+		}
+		// build the message
+		StartClientRequestSuspectMessage startMsg = new StartClientRequestSuspectMessage(msg.getPendingRequestID(), cryptoName);
+		// sign the message
+		try {
+			startMsg.signMessage(key);
+		} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException | InvalidSerializerException e) {
+			e.printStackTrace();
+			System.exit(1); //Catastrophic failure!!!
+		}
+		// send it to everyone
+		view.getView().forEach(host -> {
+			if (!host.equals(this.self)) {
+				sendMessage(startMsg, host);
 			}
-			// resend it to everyone
-			view.getView().forEach(host -> {
-				if (!host.equals(from) && !host.equals(this.self)) {
-					sendMessage(msg, host);
-				}
-			});
-		} else {
-			if (!this.unhandledRequestsMessages.get(msg.getPendingRequestID()).contains(from)) {
-				this.unhandledRequestsMessages.get(msg.getPendingRequestID()).add(from);
-				if (this.unhandledRequestsMessages.get(msg.getPendingRequestID()).size() == 2 * this.f + 1) {
+		});
+	}
 
-					// We have received enough ClientRequestUnhandledMessage to assume that the Leader had it
-					// We can now start a last chance timer
-					LeaderSuspectTimer timer = new LeaderSuspectTimer(msg.getPendingRequestID());
-					//Put the timer in the hashmap of timers
-					if (this.pendingRequestsTimers.containsKey(msg.getPendingRequestID())) {
-						cancelTimer(this.pendingRequestsTimers.get(msg.getPendingRequestID()));
-						this.pendingRequestsTimers.remove(msg.getPendingRequestID());
-					}
-					this.pendingRequestsTimers.put(msg.getPendingRequestID(), setupTimer(timer, leaderTimeout));
-					
-				}
-			} 
+	// ----------------------------------------- StartClientRequestSuspectMessage ------------------------------------------*/
+
+	private void handleStartClientRequestSuspectMessage(StartClientRequestSuspectMessage msg, Host from, short sourceProto, int channel) {
+
+		if (!checkValidMessage(msg, from)){
+			return;
+		}
+		
+		if (this.unhandledRequestsMessages.containsKey(msg.getPendingRequestID())) {
+			this.unhandledRequestsMessages.get(msg.getPendingRequestID()).add(from);
+			logger.info("Received " + this.unhandledRequestsMessages.get(msg.getPendingRequestID()).size() + " StartClientRequestSuspectMessage with id: " + msg.getPendingRequestID());
+			if (this.unhandledRequestsMessages.get(msg.getPendingRequestID()).size() >= 2 * this.f + 1) {
+				//start a leader suspect timer
+				LeaderSuspectTimer timer = new LeaderSuspectTimer(msg.getPendingRequestID(), this.viewNumber);
+				//add the timer to the list 
+				this.pendingRequestsTimers.put(msg.getPendingRequestID(), setupTimer(timer, leaderTimeout));
+			}
+		} else {
+			this.unhandledRequestsMessages.put(msg.getPendingRequestID(), new LinkedList<Host>());
+			this.unhandledRequestsMessages.get(msg.getPendingRequestID()).add(from);
 		}
 	}
 
@@ -327,8 +369,14 @@ public class BlockChainProtocol extends GenericProtocol {
     
 	public void handleCheckUnhandledRequestsPeriodicTimer(CheckUnhandledRequestsPeriodicTimer t, long timerId) {
 
+		cancelTimer(timerId);
+		pendingRequestsTimers.remove(t.getPendingRequestID());
 
-		ClientRequestUnhandledMessage msg = new ClientRequestUnhandledMessage(t.getPendingRequestID());	
+		if (waitingForViewChange){
+			return;
+		}
+
+		ClientRequestUnhandledMessage msg = new ClientRequestUnhandledMessage(t.getPendingRequestID(), cryptoName);
 
 		//sign the message
 		try {
@@ -355,6 +403,9 @@ public class BlockChainProtocol extends GenericProtocol {
 	
 	public void handleLeaderSuspectTimer(LeaderSuspectTimer t, long timerId) {
 
+		cancelTimer(timerId);
+		pendingRequestsTimers.remove(t.getRequestID());
+
 		if (waitingForViewChange) {
 			return;
 		}
@@ -362,6 +413,10 @@ public class BlockChainProtocol extends GenericProtocol {
 		//Send a StartViewChange message to his PBFT protocol
 		logger.info("Leader suspect timer expired for request " + t.getRequestID());
 		this.unhandledRequestsMessages.remove(t.getRequestID());
+		
+		if (this.viewNumber > t.getViewNumber()) {
+			return;
+		}
 
 		byte[] signature;
 		try {
@@ -374,6 +429,49 @@ public class BlockChainProtocol extends GenericProtocol {
 		}
 		
 	}
+
+	/* ----------------------------------------------- ------------- ------------------------------------------ */
+	/* ---------------------------------------------- VERIFY FUNCTION ----------------------------------------- */
+	/* ----------------------------------------------- ------------- ------------------------------------------ */
+
+	private boolean checkValidMessage(Object msgObj, Host from) {
+		boolean check = false;
+		if (msgObj instanceof ClientRequestUnhandledMessage){
+			ClientRequestUnhandledMessage msg = (ClientRequestUnhandledMessage) msgObj;
+			try{
+				check = msg.checkSignature(truststore.getCertificate(msg.getCryptoName()).getPublicKey());
+			}
+			catch(InvalidFormatException | NoSignaturePresentException | NoSuchAlgorithmException | InvalidKeyException |
+			SignatureException | KeyStoreException e){
+				logger.error("Error checking signature in " + msg.getClass() + " from " + from + ": " + e.getMessage());
+				return false;
+			}
+		} else if (msgObj instanceof RedirectClientRequestMessage){
+			RedirectClientRequestMessage msg = (RedirectClientRequestMessage) msgObj;
+			try{
+				check = msg.checkSignature(truststore.getCertificate(msg.getCryptoName()).getPublicKey());
+			}
+			catch(InvalidFormatException | NoSignaturePresentException | NoSuchAlgorithmException | InvalidKeyException |
+			SignatureException | KeyStoreException e){
+				logger.error("Error checking signature in " + msg.getClass() + " from " + from + ": " + e.getMessage());
+				return false;
+			}
+		} else if (msgObj instanceof StartClientRequestSuspectMessage){
+			StartClientRequestSuspectMessage msg = (StartClientRequestSuspectMessage) msgObj;
+			try{
+				check = msg.checkSignature(truststore.getCertificate(msg.getCryptoName()).getPublicKey());
+			}
+			catch(InvalidFormatException | NoSignaturePresentException | NoSuchAlgorithmException | InvalidKeyException |
+			SignatureException | KeyStoreException e){
+				logger.error("Error checking signature in " + msg.getClass() + " from " + from + ": " + e.getMessage());
+				return false;
+			}
+		} else {
+			logger.error("Unknown message type: " + msgObj.getClass());
+			throw new IllegalArgumentException("Message is not valid");
+		}
+		return check;
+	}
 	
 	/* ----------------------------------------------- ------------- ------------------------------------------ */
     /* ----------------------------------------------- APP INTERFACE ------------------------------------------ */
@@ -381,5 +479,16 @@ public class BlockChainProtocol extends GenericProtocol {
     public void submitClientOperation(byte[] b) {
     	sendRequest(new ClientRequest(b), BlockChainProtocol.PROTO_ID);
     }
+
+	/* ----------------------------------------------- ------------- ------------------------------------------ */
+	/* ----------------------------------------------- UTIL FUNCTION ------------------------------------------ */
+	/* ----------------------------------------------- ------------- ------------------------------------------ */
+
+	private void handleUnhandledRequest(UUID reqId) {
+		if (this.pendingRequestsTimers.get(reqId) != null) cancelTimer(this.pendingRequestsTimers.get(reqId));
+		this.pendingRequestsTimers.remove(reqId);
+		CheckUnhandledRequestsPeriodicTimer timer = new CheckUnhandledRequestsPeriodicTimer(reqId);
+		this.pendingRequestsTimers.put(reqId, setupTimer(timer, checkRequestsPeriod));
+	}
 
 }

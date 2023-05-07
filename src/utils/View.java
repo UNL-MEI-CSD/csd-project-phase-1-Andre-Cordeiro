@@ -25,7 +25,7 @@ public class View {
     }
 
     public Host getLeader() {
-        return this.view.get(this.viewNumber);
+        return this.view.get(this.viewNumber%this.view.size());
     }
 
     public int getViewNumber() {

@@ -53,4 +53,12 @@ public class CommitMessage extends SignedProtoMessage{
 	public String getCryptoName() {
 		return cryptoName;
 	}
+
+	@Override
+	public String toString() {
+		return "CommitMessage{" +
+				"batchKey=" + batchKey +
+				", cryptoName='" + cryptoName + '\'' +
+				'}';
+	}
 }

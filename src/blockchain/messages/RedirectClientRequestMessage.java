@@ -1,6 +1,7 @@
 package blockchain.messages;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 import blockchain.requests.ClientRequest;
 import io.netty.buffer.ByteBuf;
@@ -12,10 +13,13 @@ public class RedirectClientRequestMessage extends SignedProtoMessage{
 	public final static short MESSAGE_ID = 207;
 
 	private final ClientRequest clientRequest;
+
+	private final String cryptoName;
 	
-	public RedirectClientRequestMessage(ClientRequest clientRequest) {
+	public RedirectClientRequestMessage(ClientRequest clientRequest, String cryptoName) {
 		super(RedirectClientRequestMessage.MESSAGE_ID);
 		this.clientRequest = clientRequest;
+		this.cryptoName = cryptoName;
 	}
 
 	public static final SignedMessageSerializer<RedirectClientRequestMessage> serializer = new SignedMessageSerializer<RedirectClientRequestMessage>() {
@@ -24,6 +28,8 @@ public class RedirectClientRequestMessage extends SignedProtoMessage{
 		public void serializeBody(RedirectClientRequestMessage signedProtoMessage, ByteBuf out) throws IOException {
 			out.writeInt(signedProtoMessage.clientRequest.generateByteRepresentation().length);
 			out.writeBytes(signedProtoMessage.clientRequest.generateByteRepresentation());
+			out.writeInt(signedProtoMessage.cryptoName.length());
+			out.writeCharSequence(signedProtoMessage.cryptoName, StandardCharsets.UTF_8);
 		}
 
 		@Override
@@ -32,7 +38,9 @@ public class RedirectClientRequestMessage extends SignedProtoMessage{
 			byte[] clientRequestBytes = new byte[clientRequestLength];
 			in.readBytes(clientRequestBytes);
 			ClientRequest clientRequest = ClientRequest.fromBytes(clientRequestBytes);
-			return new RedirectClientRequestMessage(clientRequest);
+			int cryptoNameint = in.readInt();
+			String cryptoName = in.readCharSequence(cryptoNameint, StandardCharsets.UTF_8).toString();
+			return new RedirectClientRequestMessage(clientRequest, cryptoName);
 		}
 		
 	};
@@ -50,10 +58,15 @@ public class RedirectClientRequestMessage extends SignedProtoMessage{
 		return clientRequest;
 	}
 
+	public String getCryptoName() {
+		return cryptoName;
+	}
+
 	@Override
 	public String toString() {
 		return "RedirectClientRequestMessage{" +
 				"clientRequest=" + clientRequest +
+				", cryptoName='" + cryptoName + '\'' +
 				'}';
 	}
 

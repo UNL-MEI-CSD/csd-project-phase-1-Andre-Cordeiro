@@ -6,7 +6,7 @@ PORTS = $(shell seq 5000 2 $$((($(NBR)-1)*2+5000)))
 
 MEMBERSHIP = $(shell echo $(PORTS) | sed 's/ /,localhost:/g' | sed 's/^/localhost:/')
 
-all: kill clean build info start_replica start_client
+all: kill clean build info start_client start_replica 
 	
 build:
 	@echo "${BOLD}${SYELLOW}📦  Building the jar file ${S}"
@@ -30,7 +30,7 @@ start_replica:
 	@echo "${BOLD}${SBLUE}🎉  All nodes are started ${S}"
 
 start_client:
-	@echo "${BOLD}${SBLUE}🎉  Starting the client ${S}"
+	@echo "${BOLD}${SGREEN} Starting the client ${S}"
 	@gnome-terminal --title="Client" --geometry=100x30 --working-directory=$(PWD)/../CSD-Lab6-Client/deploy/ -- bash -c "echo '🚀 Starting the client :'; \
 	java -Dlog4j.configurationFile=log4j2.xml -jar csd2223-client.jar; \
 	exec bash;" ;\
