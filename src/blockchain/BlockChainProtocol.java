@@ -1,5 +1,6 @@
 package blockchain;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.UnknownHostException;
 import java.security.InvalidKeyException;
@@ -20,6 +21,7 @@ import java.util.UUID;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import blockchain.blockchain.Block;
 import blockchain.blockchain.BlockChain;
 import blockchain.messages.ClientRequestUnhandledMessage;
 import blockchain.messages.RedirectClientRequestMessage;
@@ -39,7 +41,6 @@ import pt.unl.fct.di.novasys.babel.generic.ProtoMessage;
 import pt.unl.fct.di.novasys.babel.generic.signed.InvalidFormatException;
 import pt.unl.fct.di.novasys.babel.generic.signed.InvalidSerializerException;
 import pt.unl.fct.di.novasys.babel.generic.signed.NoSignaturePresentException;
-import pt.unl.fct.di.novasys.babel.generic.signed.SignedProtoMessage;
 import pt.unl.fct.di.novasys.network.data.Host;
 import utils.Crypto;
 import utils.SignaturesHelper;
@@ -83,7 +84,7 @@ public class BlockChainProtocol extends GenericProtocol {
 	//BlockChain
 	private BlockChain blockChain;
 	private int lastBlockNumber; //sequence number equivalent
-	private SignedProtoMessage[] nextTransaction;
+	private List<byte[]> pendingOperations;
 	
 
 	
@@ -98,6 +99,7 @@ public class BlockChainProtocol extends GenericProtocol {
 		viewNumber = 0;
 		view = new View(viewNumber);
 		waitingForViewChange = false;
+		initializeBlockChain();
 		
 		//Read timers and timeouts configurations
 		checkRequestsPeriod = Long.parseLong(props.getProperty(PERIOD_CHECK_REQUESTS));
@@ -142,14 +144,61 @@ public class BlockChainProtocol extends GenericProtocol {
 	/* ------------------------------------------ Block Creation function ------------------------------------- */
 	/* ----------------------------------------------- ------------- ------------------------------------------ */
 	
-	private void createBlock() {
+	private void forgeBlock() {
+
+		ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+		for (byte[] operation : pendingOperations) {
+			try {
+				outputStream.write(operation.length);
+				outputStream.write(operation);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+		byte[] operationsBytes = outputStream.toByteArray();
+		pendingOperations.clear();
+		//Create a new block
+		byte[] signature;
+		try {
+			signature = SignaturesHelper.generateSignature(operationsBytes, key);
+			Block block = new Block(self, blockChain.getLastBlock().hashCode(), lastBlockNumber+1, signature ,operationsBytes);
+			//generate the propose request
+			byte[] blockBytes = serializeBlock(block);
+			byte[] blockSignature = SignaturesHelper.generateSignature(blockBytes, key);
+			ProposeRequest proposeRequest = new ProposeRequest(blockBytes, blockSignature);
+			//send the propose request to the PBFTProtocol
+			sendRequest(proposeRequest, PBFTProtocol.PROTO_ID);
+		} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException e) {
+			e.printStackTrace();
+		}
+	}
+
+	private void addOperationToBlock(byte[] operation) {
+		//Check if the operation is valid
+
+		//then add it to the list of next operations
+		pendingOperations.add(operation);
+		if (pendingOperations.size() == 10) {
+			forgeBlock();
+		}
 
 	}
 
-	private void addTransactionToBlock(SignedProtoMessage transaction) {
+	/* ----------------------------------------------- ------------- ------------------------------------------ */
+	/* ------------------------------------------- Blockchain Function ---------------------------------------- */
+	/* ----------------------------------------------- ------------- ------------------------------------------ */
+
+	private void initializeBlockChain() {
+
+		//Create the blockChain
+		blockChain = new BlockChain();
+		//Create the genesis block
+		
+
+		pendingOperations = new LinkedList<>();
+		lastBlockNumber = 0;
 
 	}
-	
 	/* ----------------------------------------------- ------------- ------------------------------------------ */
     /* ---------------------------------------------- REQUEST HANDLER ----------------------------------------- */
     /* ----------------------------------------------- ------------- ------------------------------------------ */
@@ -163,19 +212,7 @@ public class BlockChainProtocol extends GenericProtocol {
 
 		if(this.leader) {
 			
-			try {
-				//TODO: This is a super over simplification we will handle latter
-				//Only one block should be submitted for agreement at a time
-				//Also this assumes that a block only contains a single client request
-				byte[] request = req.generateByteRepresentation();
-				byte[] signature = SignaturesHelper.generateSignature(request, this.key);
-				
-				sendRequest(new ProposeRequest(request, signature), PBFTProtocol.PROTO_ID);
-				
-			} catch (Exception e) {
-				e.printStackTrace();
-				System.exit(1); //Catastrophic failure!!!
-			}
+			addOperationToBlock(req.getOperation());
 		} else {
 			//Redirect the request to the leader
 			RedirectClientRequestMessage msg = new RedirectClientRequestMessage(req, cryptoName);
@@ -228,17 +265,17 @@ public class BlockChainProtocol extends GenericProtocol {
 		//TODO: write this handler
 		logger.info("Received a commit notification with id: " + cn + " from: " + from);
 
-		// get the client request from the block
-		ClientRequest req = ClientRequest.fromBytes(cn.getBlock());
-		// cancel the timer for this request
-		if (pendingRequestsTimers.containsKey(req.getRequestId())) {
-			cancelTimer(pendingRequestsTimers.get(req.getRequestId()));
-			pendingRequestsTimers.remove(req.getRequestId());
-		}
-		// remove the list of unhandled requests
-		if (unhandledRequestsMessages.containsKey(req.getRequestId())) {
-			unhandledRequestsMessages.remove(req.getRequestId());
-		}
+		// // get the client request from the block
+		// ClientRequest req = deserializeClientRequest(cn.getBlock().getOperations());
+		// // cancel the timer for this request
+		// if (pendingRequestsTimers.containsKey(req.getRequestId())) {
+		// 	cancelTimer(pendingRequestsTimers.get(req.getRequestId()));
+		// 	pendingRequestsTimers.remove(req.getRequestId());
+		// }
+		// // remove the list of unhandled requests
+		// if (unhandledRequestsMessages.containsKey(req.getRequestId())) {
+		// 	unhandledRequestsMessages.remove(req.getRequestId());
+		// }
 		
 	}
 
@@ -282,12 +319,7 @@ public class BlockChainProtocol extends GenericProtocol {
 		if(this.leader) {
 			
 			try {
-				logger.info("Received a RedirectClientRequestMessage with id: " + msg.getClientRequest().getRequestId() + " from: " + from);
-				
-				byte[] request = msg.getClientRequest().generateByteRepresentation();
-				byte[] signature = SignaturesHelper.generateSignature(request, this.key);
-				
-				sendRequest(new ProposeRequest(request, signature), PBFTProtocol.PROTO_ID);
+				addOperationToBlock(msg.getClientRequest().getOperation());
 			} catch (Exception e) {
 				e.printStackTrace();
 				System.exit(1); //Catastrophic failure!!!
@@ -342,7 +374,7 @@ public class BlockChainProtocol extends GenericProtocol {
 		
 		if (this.unhandledRequestsMessages.containsKey(msg.getPendingRequestID())) {
 			this.unhandledRequestsMessages.get(msg.getPendingRequestID()).add(from);
-			logger.info("Received " + this.unhandledRequestsMessages.get(msg.getPendingRequestID()).size() + " StartClientRequestSuspectMessage with id: " + msg.getPendingRequestID());
+			// logger.info("Received " + this.unhandledRequestsMessages.get(msg.getPendingRequestID()).size() + " StartClientRequestSuspectMessage with id: " + msg.getPendingRequestID());
 			if (this.unhandledRequestsMessages.get(msg.getPendingRequestID()).size() >= 2 * this.f + 1) {
 				//start a leader suspect timer
 				LeaderSuspectTimer timer = new LeaderSuspectTimer(msg.getPendingRequestID(), this.viewNumber);
@@ -491,4 +523,25 @@ public class BlockChainProtocol extends GenericProtocol {
 		this.pendingRequestsTimers.put(reqId, setupTimer(timer, checkRequestsPeriod));
 	}
 
+	public byte[] serializeBlock(Block block){
+		ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try {
+            bos.write(block.getValidater().toString().getBytes());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        bos.write(block.getHashPreviousBlock());
+        bos.write(block.getBlockNumber());
+        try {
+			bos.write(block.getSignature());
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		try {
+			bos.write(block.getOperations());
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return bos.toByteArray();
+	}
 }
