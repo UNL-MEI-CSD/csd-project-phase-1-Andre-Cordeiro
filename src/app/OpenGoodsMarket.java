@@ -26,7 +26,11 @@ import app.messages.client.requests.IssueWant;
 import app.messages.exchange.requests.Deposit;
 import app.messages.exchange.requests.Withdrawal;
 import blockchain.BlockChainProtocol;
+import blockchain.blockchain.Operation.CancelOp;
+import blockchain.blockchain.Operation.DepositOp;
 import blockchain.blockchain.Operation.OfferOp;
+import blockchain.blockchain.Operation.WantOp;
+import blockchain.blockchain.Operation.WithdrawalOp;
 import blockchain.requests.ClientRequest;
 import consensus.PBFTProtocol;
 import pt.unl.fct.di.novasys.babel.core.Babel;
@@ -172,8 +176,10 @@ public class OpenGoodsMarket extends GenericProtocol {
 		opers_body.put(iw.getRid(), iw);
 		
 		GenericClientReply ack = new GenericClientReply(iw.getRid());
-		
 		sendMessage(clientChannel, ack, sourceProto, from, 0);
+
+		ClientRequest cr = new ClientRequest(new WantOp(iw).toByteArray());
+		sendRequest(cr, BlockChainProtocol.PROTO_ID);
 	}
 	
 	public void handleCancelMessage(Cancel c, Host from, short sourceProto, int channelID ) {
@@ -184,8 +190,10 @@ public class OpenGoodsMarket extends GenericProtocol {
 		}
 		
 		GenericClientReply ack = new GenericClientReply(c.getrID());
-		
 		sendMessage(clientChannel, ack, sourceProto, from, 0);
+
+		ClientRequest cr = new ClientRequest(new CancelOp(c).toByteArray());
+		sendRequest(cr, BlockChainProtocol.PROTO_ID);
 	}
 	
 	public void handleCheckOperationStatusMessage(CheckOperationStatus cos, Host from, short sourceProto, int channelID) {
@@ -242,8 +250,10 @@ public class OpenGoodsMarket extends GenericProtocol {
 		opers_body.put(d.getRid(), d);
 		
 		GenericClientReply ack = new GenericClientReply(d.getRid());
-		
 		sendMessage(clientChannel, ack, sourceProto, from, 0);
+
+		ClientRequest cr = new ClientRequest(new DepositOp(d).toByteArray());
+		sendRequest(cr, BlockChainProtocol.PROTO_ID);
 	}
 	
 	public void handleWithdrawalMessage(Withdrawal w, Host from, short sourceProto, int channelID) {
@@ -253,8 +263,10 @@ public class OpenGoodsMarket extends GenericProtocol {
 		opers_body.put(w.getRid(), w);
 		
 		GenericClientReply ack = new GenericClientReply(w.getRid());
-		
 		sendMessage(clientChannel, ack, sourceProto, from, 0);
+
+		ClientRequest cr = new ClientRequest(new WithdrawalOp(w).toByteArray());
+		sendRequest(cr, BlockChainProtocol.PROTO_ID);
 	}
 	
 	private void uponClientConnectionUp(ClientUpEvent event, int channel) {
