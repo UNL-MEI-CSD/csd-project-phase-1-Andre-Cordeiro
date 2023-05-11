@@ -174,7 +174,7 @@ public class BlockChainProtocol extends GenericProtocol {
 	}
 
 	private void addOperationToBlock(byte[] operation) {
-		//Check if the operation is valid
+		// TODO: Check if the operation is valid
 
 		//then add it to the list of next operations
 		pendingOperations.add(operation);

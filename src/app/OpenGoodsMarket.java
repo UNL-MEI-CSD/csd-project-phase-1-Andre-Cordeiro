@@ -6,9 +6,12 @@ import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.security.GeneralSecurityException;
+import java.security.PublicKey;
 import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Properties;
 import java.util.Random;
 import java.util.UUID;
@@ -156,6 +159,10 @@ public class OpenGoodsMarket extends GenericProtocol {
 	
 	private HashMap<UUID, OperationStatusReply.Status> opers = new HashMap<>();
 	private HashMap<UUID, SignedProtoMessage> opers_body = new HashMap<>();
+	private HashMap<PublicKey, Float> clientAccountBalance = new HashMap<>();
+	private HashMap<WantOfferKeys, List<SignedProtoMessage>> wantHashMap = new HashMap<>();
+	private HashMap<WantOfferKeys, List<SignedProtoMessage>>  offerHashMap = new HashMap<>();
+
 	
 	public void handleIssueOfferMessage(IssueOffer io, Host from, short sourceProto, int channelID ) {
 		// logger.info("Received IssueOffer (" + io.getRid() + " from " + from + "(" + io.getcID().toString() + ")");
@@ -276,4 +283,82 @@ public class OpenGoodsMarket extends GenericProtocol {
     private void uponClientConnectionDown(ClientDownEvent event, int channel) {
         logger.warn(event);
     }
+
+	// ------------------------------------- App state update methods ------------------------------------------- //
+
+	private void executeOperation(SignedProtoMessage msg){
+		if (msg instanceof IssueWant){
+			executeIssueWant((IssueWant) msg);
+		} 
+		else if (msg instanceof IssueOffer){
+			executeIssueOffer((IssueOffer) msg);
+		}
+		else if (msg instanceof Cancel){
+			executeCancel((Cancel) msg);
+		}
+		else if (msg instanceof Deposit){
+			executeDeposit((Deposit) msg);
+		}
+		else if (msg instanceof Withdrawal){
+			executeWithdrawal((Withdrawal) msg);
+		}
+		else {
+			logger.error("Unknown message type: " + msg.getClass());
+		}
+	}
+
+	private void executeIssueOffer(IssueOffer msg){
+		WantOfferKeys tempkeys = new WantOfferKeys(msg.getQuantity(), msg.getPricePerUnit());
+		if (wantHashMap.containsKey(tempkeys)){
+			logger.info("matched offer found");
+			wantHashMap.remove(tempkeys);
+		} else {
+			offerHashMap.put(tempkeys, new LinkedList<>());
+			offerHashMap.get(tempkeys).add(msg);
+		}
+	}
+
+	private void executeIssueWant(IssueWant msg){
+		WantOfferKeys tempkeys = new WantOfferKeys(msg.getQuantity(), msg.getPricePerUnit());
+		if (offerHashMap.containsKey(tempkeys)){
+			logger.info("matched offer found");
+			offerHashMap.remove(tempkeys);
+		} else {
+			wantHashMap.put(tempkeys, new LinkedList<>());
+			wantHashMap.get(tempkeys).add(msg);
+		}
+	}
+
+	private void executeCancel(Cancel msg){
+		SignedProtoMessage tempmsg = opers_body.get(msg.getrID());
+		if (tempmsg instanceof IssueWant){
+			WantOfferKeys tempkeys = new WantOfferKeys(
+				((IssueWant) tempmsg).getQuantity(), 
+				((IssueWant) tempmsg).getPricePerUnit()
+			);
+			wantHashMap.remove(tempkeys);
+		} 
+		else if (tempmsg instanceof IssueOffer){
+			WantOfferKeys tempkeys = new WantOfferKeys(
+				((IssueOffer) tempmsg).getQuantity(), 
+				((IssueOffer) tempmsg).getPricePerUnit()
+			);
+			offerHashMap.remove(tempkeys);
+		}
+		else {
+			logger.error("Unknown message type: " + tempmsg.getClass());
+		}
+	}
+
+	private void executeDeposit(Deposit msg){
+
+	}
+
+	private void executeWithdrawal(Withdrawal msg){
+
+	}
+	
+
+
+
 }
