@@ -34,7 +34,7 @@ public class Deposit extends SignedProtoMessage{
 		this.amount = a;	
 	}
 
-	public Deposit() {
+	public Deposit(){
 		super(Deposit.MESSAGE_ID);
 	}
 

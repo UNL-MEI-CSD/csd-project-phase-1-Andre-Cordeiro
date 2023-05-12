@@ -22,9 +22,9 @@ public class StateApp {
 
     private HashMap<PublicKey, Float> clientAccountBalance = new HashMap<>();
 
-	private HashMap<WantOfferKeys, List<SignedProtoMessage>> wantHashMap = new HashMap<>();
+	private HashMap<WantOfferKeys, List<IssueWant>> wantHashMap = new HashMap<>();
     
-	private HashMap<WantOfferKeys, List<SignedProtoMessage>>  offerHashMap = new HashMap<>();
+	private HashMap<WantOfferKeys, List<IssueOffer>>  offerHashMap = new HashMap<>();
 
 	private HashMap<UUID, SignedProtoMessage> opers_body = new HashMap<>();
 
@@ -50,19 +50,19 @@ public class StateApp {
         this.clientAccountBalance = clientAccountBalance;
     }
 
-    public HashMap<WantOfferKeys, List<SignedProtoMessage>> getWantHashMap() {
+    public HashMap<WantOfferKeys, List<IssueWant>> getWantHashMap() {
         return wantHashMap;
     }
 
-    public void setWantHashMap(HashMap<WantOfferKeys, List<SignedProtoMessage>> wantHashMap) {
+    public void setWantHashMap(HashMap<WantOfferKeys, List<IssueWant>> wantHashMap) {
         this.wantHashMap = wantHashMap;
     }
 
-    public HashMap<WantOfferKeys, List<SignedProtoMessage>> getOfferHashMap() {
+    public HashMap<WantOfferKeys, List<IssueOffer>> getOfferHashMap() {
         return offerHashMap;
     }
 
-    public void setOfferHashMap(HashMap<WantOfferKeys, List<SignedProtoMessage>> offerHashMap) {
+    public void setOfferHashMap(HashMap<WantOfferKeys, List<IssueOffer>> offerHashMap) {
         this.offerHashMap = offerHashMap;
     }
 
@@ -85,30 +85,42 @@ public class StateApp {
 
     // --------------------------------------------- Executions ---------------------------------------------
 
-    private void executeOperation(SignedProtoMessage msg){
-		if (msg instanceof IssueWant){
-			executeIssueWant((IssueWant) msg);
-		} 
-		else if (msg instanceof IssueOffer){
-			executeIssueOffer((IssueOffer) msg);
-		}
-		else if (msg instanceof Cancel){
-			executeCancel((Cancel) msg);
-		}
-		else if (msg instanceof Deposit){
-			executeDeposit((Deposit) msg);
-		}
-		else if (msg instanceof Withdrawal){
-			executeWithdrawal((Withdrawal) msg);
-		}
-		else {
-			throw new RuntimeException("Unknown message type: " + msg.getClass());
-		}
+    public void executeOperation(byte[] op){
+		ByteBuf buf = Unpooled.copiedBuffer(op);
+		try {
+			IssueOffer offer = new IssueOffer();
+			offer = offer.getSerializer().deserializeBody(buf);
+			executeIssueOffer(offer);
+		} catch (Exception e) {/*do nothing*/}
+		try {
+			IssueWant want = new IssueWant();
+			want = want.getSerializer().deserializeBody(buf);
+			executeIssueWant(want);
+		} catch (Exception e) {/*do nothing*/}
+		try {
+			Cancel cancel = new Cancel();
+			cancel = cancel.getSerializer().deserializeBody(buf);
+			executeCancel(cancel);
+		} catch (Exception e) {/*do nothing*/}
+		try {
+			Deposit deposit = new Deposit();
+			deposit = deposit.getSerializer().deserializeBody(buf);
+			executeDeposit(deposit);
+		} catch (Exception e) {/*do nothing*/}
+		try {
+			Withdrawal withdrawal = new Withdrawal();
+			withdrawal = withdrawal.getSerializer().deserializeBody(buf);
+			executeWithdrawal(withdrawal);
+		} catch (Exception e) {/*do nothing*/}
 	}
 
 	private void executeIssueOffer(IssueOffer msg){
 		WantOfferKeys tempkeys = new WantOfferKeys(msg.getQuantity(), msg.getPricePerUnit());
 		if (wantHashMap.containsKey(tempkeys)){
+			//remove the money from the buyer
+			clientAccountBalance.put(wantHashMap.get(tempkeys).get(0).getcID(), clientAccountBalance.get(wantHashMap.get(tempkeys).get(0).getcID()) - msg.getQuantity() * msg.getPricePerUnit());
+			//add the money to the seller
+			clientAccountBalance.put(msg.getcID(), clientAccountBalance.get(msg.getcID()) + msg.getQuantity() * msg.getPricePerUnit());
 			wantHashMap.remove(tempkeys);
 		} else {
 			offerHashMap.put(tempkeys, new LinkedList<>());
@@ -119,6 +131,10 @@ public class StateApp {
 	private void executeIssueWant(IssueWant msg){
 		WantOfferKeys tempkeys = new WantOfferKeys(msg.getQuantity(), msg.getPricePerUnit());
 		if (offerHashMap.containsKey(tempkeys)){
+			//remove the money from the buyer 
+			clientAccountBalance.put(msg.getcID(), clientAccountBalance.get(msg.getcID()) - msg.getQuantity() * msg.getPricePerUnit());
+			//add the money to the seller
+			clientAccountBalance.put(offerHashMap.get(tempkeys).get(0).getcID(), clientAccountBalance.get(offerHashMap.get(tempkeys).get(0).getcID()) + msg.getQuantity() * msg.getPricePerUnit());
 			offerHashMap.remove(tempkeys);
 		} else {
 			wantHashMap.put(tempkeys, new LinkedList<>());
@@ -148,11 +164,17 @@ public class StateApp {
 	}
 
 	private void executeDeposit(Deposit msg){
-
+		if (clientAccountBalance.containsKey(msg.getClientID())){
+			clientAccountBalance.put(msg.getClientID(), clientAccountBalance.get(msg.getClientID()) + msg.getAmount());
+		} else {
+			clientAccountBalance.put(msg.getClientID(), msg.getAmount());
+		}
 	}
 
 	private void executeWithdrawal(Withdrawal msg){
-
+		if (clientAccountBalance.containsKey(msg.getClientID())){
+			clientAccountBalance.put(msg.getClientID(), clientAccountBalance.get(msg.getClientID()) - msg.getAmount());
+		} 
 	}
 
     /* ----------------------------------------- Operation Validation ----------------------------------- */
@@ -163,27 +185,27 @@ public class StateApp {
 		buf.writeBytes(operation);
 		try {
 			IssueOffer offer = new IssueOffer();
-			offer = offer.getSerializer().deserialize(buf);
+			offer = offer.getSerializer().deserializeBody(buf);
 			return isOfferValid(offer);
 		} catch (Exception e) {/*do nothing*/}
 		try {
 			IssueWant want = new IssueWant();
-			want = want.getSerializer().deserialize(buf);
+			want = want.getSerializer().deserializeBody(buf);
 			return isWantValid(want);
 		} catch (Exception e) {/*do nothing*/}
 		try {
 			Cancel cancel = new Cancel();
-			cancel = cancel.getSerializer().deserialize(buf);
+			cancel = cancel.getSerializer().deserializeBody(buf);
 			return isCancelValid(cancel);
 		} catch (Exception e) {/*do nothing*/}
 		try {
 			Deposit deposit = new Deposit();
-			deposit = deposit.getSerializer().deserialize(buf);
+			deposit = deposit.getSerializer().deserializeBody(buf);
 			return isDepositValid(deposit);
 		} catch (Exception e) {/*do nothing*/}
 		try {
 			Withdrawal withdrawal = new Withdrawal();
-			withdrawal = withdrawal.getSerializer().deserialize(buf);
+			withdrawal = withdrawal.getSerializer().deserializeBody(buf);
 			return isWithdrawalValid(withdrawal);
 		} catch (Exception e) {/*do nothing*/}
 		return false;
@@ -202,15 +224,15 @@ public class StateApp {
 	}
 
 	private boolean isWantValid(IssueWant want) {
-		return true;
-	}
-
-	private boolean isOfferValid(IssueOffer offer) {
-		if (clientAccountBalance.containsKey(offer.getcID())){
-			return clientAccountBalance.get(offer.getcID()) >= offer.getQuantity() * offer.getPricePerUnit();
+		if (clientAccountBalance.containsKey(want.getcID())){
+			return clientAccountBalance.get(want.getcID()) >= want.getQuantity() * want.getPricePerUnit();
 		} else {
 			return false;
 		}
+	}
+
+	private boolean isOfferValid(IssueOffer offer) {
+		return true;
 	}
 
 	public boolean isCancelValid(Cancel cancel){
