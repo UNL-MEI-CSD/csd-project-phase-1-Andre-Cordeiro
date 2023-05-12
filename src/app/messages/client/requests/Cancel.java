@@ -24,6 +24,11 @@ public class Cancel extends SignedProtoMessage {
 		this.rID = rID;
 		this.cID = cID;
 	}
+
+	public Cancel()
+	{
+		super(Cancel.MESSAGE_ID);
+	}
 	
 	public final static SignedMessageSerializer<Cancel> serializer = new SignedMessageSerializer<Cancel>() {
 
@@ -57,7 +62,7 @@ public class Cancel extends SignedProtoMessage {
 	};
 
 	@Override
-	public SignedMessageSerializer<? extends SignedProtoMessage> getSerializer() {
+	public SignedMessageSerializer<Cancel> getSerializer() {
 		return Cancel.serializer;
 	}
 
@@ -75,6 +80,14 @@ public class Cancel extends SignedProtoMessage {
 
 	public void setcID(PublicKey cID) {
 		this.cID = cID;
+	}
+
+	@Override
+	public String toString() {
+		return "Cancel ["+
+			"rID=" + rID + 
+			", cID=" + cID + 
+			"]";
 	}
 	
 }

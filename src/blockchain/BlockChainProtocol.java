@@ -45,6 +45,7 @@ import pt.unl.fct.di.novasys.network.data.Host;
 import utils.Crypto;
 import utils.SignaturesHelper;
 import utils.View;
+import utils.StateApp.StateApp;
 
 public class BlockChainProtocol extends GenericProtocol {
 
@@ -81,6 +82,9 @@ public class BlockChainProtocol extends GenericProtocol {
 	// a HashMap to count the host that have send a unhandled request
 	private Map<UUID, List<Host>> unhandledRequestsMessages;
 
+	//State of the app
+	private StateApp stateApp;
+
 	//BlockChain
 	private BlockChain blockChain;
 	private int lastBlockNumber; //sequence number equivalent
@@ -96,10 +100,12 @@ public class BlockChainProtocol extends GenericProtocol {
 		//(this should not be interpreted as the unique or canonical solution)
 		// self = new Host(InetAddress.getByName(props.getProperty(ADDRESS_KEY)),
 		// 		Integer.parseInt(props.getProperty(PORT_KEY)));
+
 		viewNumber = 0;
 		view = new View(viewNumber);
 		waitingForViewChange = false;
 		initializeBlockChain();
+		this.stateApp = StateApp.getInstance();
 		
 		//Read timers and timeouts configurations
 		checkRequestsPeriod = Long.parseLong(props.getProperty(PERIOD_CHECK_REQUESTS));
@@ -174,7 +180,11 @@ public class BlockChainProtocol extends GenericProtocol {
 	}
 
 	private void addOperationToBlock(byte[] operation) {
-		// TODO: Check if the operation is valid
+
+		if (stateApp.isOperationValid(operation)) logger.info("Operation " + operation + " is valid");
+			
+		// First check if the operation is valid
+		stateApp.isOperationValid(operation);
 
 		//then add it to the list of next operations
 		pendingOperations.add(operation);
@@ -192,8 +202,6 @@ public class BlockChainProtocol extends GenericProtocol {
 
 		//Create the blockChain
 		blockChain = new BlockChain();
-		//Create the genesis block
-		
 
 		pendingOperations = new LinkedList<>();
 		lastBlockNumber = 0;

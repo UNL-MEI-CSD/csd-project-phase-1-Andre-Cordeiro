@@ -14,7 +14,7 @@ public class BlockChain {
         chain = new LinkedList<Block>();
         // Genesis block
         try {
-			chain.add(new Block(new Host(InetAddress.getLocalHost(), 0), 431, 0, new byte[0], new byte[0]));
+			chain.add(new Block(new Host(InetAddress.getLocalHost(), 12357), 431, 0, new byte[0], new byte[0]));
 		} catch (UnknownHostException e) {
 			e.printStackTrace();
 		}

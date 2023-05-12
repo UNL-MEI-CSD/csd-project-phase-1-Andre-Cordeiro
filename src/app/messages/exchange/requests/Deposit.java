@@ -34,6 +34,10 @@ public class Deposit extends SignedProtoMessage{
 		this.amount = a;	
 	}
 
+	public Deposit() {
+		super(Deposit.MESSAGE_ID);
+	}
+
 	
 	public final static SignedMessageSerializer<Deposit> serializer = new SignedMessageSerializer<Deposit>() {
 
@@ -69,7 +73,7 @@ public class Deposit extends SignedProtoMessage{
 	};
 	
 	@Override
-	public SignedMessageSerializer<? extends SignedProtoMessage> getSerializer() {
+	public SignedMessageSerializer<Deposit> getSerializer() {
 		return Deposit.serializer;
 	}
 
@@ -95,6 +99,15 @@ public class Deposit extends SignedProtoMessage{
 
 	public void setRid(UUID rid) {
 		this.rid = rid;
+	}
+
+	@Override
+	public String toString() {
+		return "Deposit ["+
+			"rid=" + rid + 
+			", clientID=" + clientID + 
+			", amount=" + amount + 
+			"]";
 	}
 
 }

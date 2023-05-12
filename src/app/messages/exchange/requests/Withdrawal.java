@@ -34,6 +34,10 @@ public class Withdrawal extends SignedProtoMessage{
 		this.amount = a;	
 	}
 
+	public Withdrawal() {
+		super(Withdrawal.MESSAGE_ID);
+	}
+
 	
 	public final static SignedMessageSerializer<Withdrawal> serializer = new SignedMessageSerializer<Withdrawal>() {
 
@@ -69,7 +73,7 @@ public class Withdrawal extends SignedProtoMessage{
 	};
 	
 	@Override
-	public SignedMessageSerializer<? extends SignedProtoMessage> getSerializer() {
+	public SignedMessageSerializer<Withdrawal> getSerializer() {
 		return Withdrawal.serializer;
 	}
 
@@ -95,6 +99,15 @@ public class Withdrawal extends SignedProtoMessage{
 
 	public void setRid(UUID rid) {
 		this.rid = rid;
+	}
+
+	@Override
+	public String toString() {
+		return "Withdrawal ["+
+			"rid=" + rid + 
+			", clientID=" + clientID + 
+			", amount=" + amount + 
+			"]";
 	}
 
 }

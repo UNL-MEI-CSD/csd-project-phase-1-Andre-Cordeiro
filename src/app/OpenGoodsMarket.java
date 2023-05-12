@@ -16,12 +16,8 @@ import java.security.SignatureException;
 import java.security.cert.CertificateException;
 import java.util.Arrays;
 import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Properties;
 import java.util.Random;
-import java.util.UUID;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -36,13 +32,10 @@ import app.messages.client.requests.IssueWant;
 import app.messages.exchange.requests.Deposit;
 import app.messages.exchange.requests.Withdrawal;
 import blockchain.BlockChainProtocol;
-import blockchain.blockchain.Operation.CancelOp;
-import blockchain.blockchain.Operation.DepositOp;
-import blockchain.blockchain.Operation.OfferOp;
-import blockchain.blockchain.Operation.WantOp;
-import blockchain.blockchain.Operation.WithdrawalOp;
 import blockchain.requests.ClientRequest;
 import consensus.PBFTProtocol;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import pt.unl.fct.di.novasys.babel.core.Babel;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
@@ -50,11 +43,11 @@ import pt.unl.fct.di.novasys.babel.exceptions.InvalidParameterException;
 import pt.unl.fct.di.novasys.babel.exceptions.ProtocolAlreadyExistsException;
 import pt.unl.fct.di.novasys.babel.generic.signed.InvalidFormatException;
 import pt.unl.fct.di.novasys.babel.generic.signed.NoSignaturePresentException;
-import pt.unl.fct.di.novasys.babel.generic.signed.SignedProtoMessage;
 import pt.unl.fct.di.novasys.channel.simpleclientserver.SimpleServerChannel;
 import pt.unl.fct.di.novasys.channel.simpleclientserver.events.ClientDownEvent;
 import pt.unl.fct.di.novasys.channel.simpleclientserver.events.ClientUpEvent;
 import pt.unl.fct.di.novasys.network.data.Host;
+import utils.StateApp.StateApp;
 
 public class OpenGoodsMarket extends GenericProtocol {
 
@@ -73,6 +66,7 @@ public class OpenGoodsMarket extends GenericProtocol {
     
     private int clientChannel;
 	private PublicKey exchangeIdentity;
+	private StateApp state;
     
     public static void main(String[] args) throws InvalidParameterException, IOException,
             HandlerRegistrationException, ProtocolAlreadyExistsException, GeneralSecurityException {
@@ -156,6 +150,8 @@ public class OpenGoodsMarket extends GenericProtocol {
 				e.printStackTrace();
 			}
 		}
+		this.state = StateApp.getInstance();
+
 		
     	clientChannel = createChannel(SimpleServerChannel.NAME, serverProps);
     	
@@ -182,23 +178,15 @@ public class OpenGoodsMarket extends GenericProtocol {
         registerChannelEventHandler(clientChannel, ClientDownEvent.EVENT_ID, this::uponClientConnectionDown);
    	}
 	
-	
-	private HashMap<UUID, OperationStatusReply.Status> opers = new HashMap<>();
-	private HashMap<UUID, SignedProtoMessage> opers_body = new HashMap<>();
-	private HashMap<PublicKey, Float> clientAccountBalance = new HashMap<>();
-	private HashMap<WantOfferKeys, List<SignedProtoMessage>> wantHashMap = new HashMap<>();
-	private HashMap<WantOfferKeys, List<SignedProtoMessage>>  offerHashMap = new HashMap<>();
-
-	
 	public void handleIssueOfferMessage(IssueOffer io, Host from, short sourceProto, int channelID ) {
 		// logger.info("Received IssueOffer (" + io.getRid() + " from " + from + "(" + io.getcID().toString() + ")");
 
 		// check if the signature is valid
 		try {
 			if (io.checkSignature(io.getcID())){
-				opers.put(io.getRid(), OperationStatusReply.Status.PENDING);
+				state.getOpers().put(io.getRid(), OperationStatusReply.Status.PENDING);
 			} else {
-				opers.put(io.getRid(), OperationStatusReply.Status.REJECTED);
+				state.getOpers().put(io.getRid(), OperationStatusReply.Status.REJECTED);
 				return;
 			}
 		} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException | InvalidFormatException
@@ -206,14 +194,20 @@ public class OpenGoodsMarket extends GenericProtocol {
 			e.printStackTrace();
 		}
 
-		opers_body.put(io.getRid(), io);
+		this.state.getOpers_body().put(io.getRid(), io);
 		
 		GenericClientReply ack = new GenericClientReply(io.getRid());
 		
 		sendMessage(clientChannel, ack, sourceProto, from, 0);
-		// convert the issue offer to a byte[] and send it to the server
-		ClientRequest cr = new ClientRequest(new OfferOp(io).toByteArray());
-		sendRequest(cr, BlockChainProtocol.PROTO_ID);
+
+		ByteBuf buf = Unpooled.buffer();
+		try {
+			io.getSerializer().serializeBody(io, buf);
+			ClientRequest cr = new ClientRequest(buf.array());
+			sendRequest(cr, BlockChainProtocol.PROTO_ID);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 	
 	public void handleIssueWantMessage(IssueWant iw, Host from, short sourceProto, int channelID ) {
@@ -222,9 +216,9 @@ public class OpenGoodsMarket extends GenericProtocol {
 		// Verify the signature of the message
 		try {
 			if (iw.checkSignature(iw.getcID())){
-				opers.put(iw.getRid(), OperationStatusReply.Status.PENDING);
+				state.getOpers().put(iw.getRid(), OperationStatusReply.Status.PENDING);
 			} else {
-				opers.put(iw.getRid(), OperationStatusReply.Status.REJECTED);
+				state.getOpers().put(iw.getRid(), OperationStatusReply.Status.REJECTED);
 				return;
 			}
 		} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException | InvalidFormatException
@@ -232,14 +226,20 @@ public class OpenGoodsMarket extends GenericProtocol {
 			e.printStackTrace();
 		}
 		
-		opers.put(iw.getRid(), OperationStatusReply.Status.PENDING);
-		opers_body.put(iw.getRid(), iw);
+		state.getOpers().put(iw.getRid(), OperationStatusReply.Status.PENDING);
+		this.state.getOpers_body().put(iw.getRid(), iw);
 		
 		GenericClientReply ack = new GenericClientReply(iw.getRid());
 		sendMessage(clientChannel, ack, sourceProto, from, 0);
 
-		ClientRequest cr = new ClientRequest(new WantOp(iw).toByteArray());
-		sendRequest(cr, BlockChainProtocol.PROTO_ID);
+		ByteBuf buf = Unpooled.buffer();
+		try {
+			iw.getSerializer().serializeBody(iw, buf);
+			ClientRequest cr = new ClientRequest(buf.array());
+			sendRequest(cr, BlockChainProtocol.PROTO_ID);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 	
 	public void handleCancelMessage(Cancel c, Host from, short sourceProto, int channelID ) {
@@ -248,9 +248,10 @@ public class OpenGoodsMarket extends GenericProtocol {
 		// Verify the signature of the message
 		try {
 			if (c.checkSignature(c.getcID())){
-				opers.put(c.getrID(), OperationStatusReply.Status.PENDING);
+				state.getOpers().put(c.getrID(), OperationStatusReply.Status.PENDING);
 			} else {
-				opers.put(c.getrID(), OperationStatusReply.Status.REJECTED);
+				state.getOpers().put(c.getrID(), OperationStatusReply.Status.REJECTED);
+				logger.warn ("Received a cancel with an invalid signature");
 				return;
 			}
 		} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException | InvalidFormatException
@@ -258,19 +259,25 @@ public class OpenGoodsMarket extends GenericProtocol {
 			e.printStackTrace();
 		}
 		// check if the operation exists
-		if(opers.containsKey(c.getrID())) {
-				opers.put(c.getrID(), OperationStatusReply.Status.PENDING);
-				opers_body.remove(c.getrID());
+		if(state.getOpers().containsKey(c.getrID())) {
+				state.getOpers().put(c.getrID(), OperationStatusReply.Status.PENDING);
+				this.state.getOpers_body().remove(c.getrID());
 		} else {
 			logger.error("Received a cancel for an operation that does not exist");
-			opers.put(c.getrID(), OperationStatusReply.Status.REJECTED);
+			state.getOpers().put(c.getrID(), OperationStatusReply.Status.REJECTED);
 		}
 		
 		GenericClientReply ack = new GenericClientReply(c.getrID());
 		sendMessage(clientChannel, ack, sourceProto, from, 0);
 
-		ClientRequest cr = new ClientRequest(new CancelOp(c).toByteArray());
-		sendRequest(cr, BlockChainProtocol.PROTO_ID);
+		ByteBuf buf = Unpooled.buffer();
+		try {
+			c.getSerializer().serializeBody(c, buf);
+			ClientRequest cr = new ClientRequest(buf.array());
+			sendRequest(cr, BlockChainProtocol.PROTO_ID);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 	
 	public void handleCheckOperationStatusMessage(CheckOperationStatus cos, Host from, short sourceProto, int channelID) {
@@ -278,7 +285,7 @@ public class OpenGoodsMarket extends GenericProtocol {
 		
 		OperationStatusReply osr = null;
 		
-		Status s = opers.get(cos.getrID());
+		Status s = state.getOpers().get(cos.getrID());
 		
 		if(s != null) {
 			switch (s) {
@@ -295,13 +302,13 @@ public class OpenGoodsMarket extends GenericProtocol {
 				osr = new OperationStatusReply(cos.getrID(), Status.PENDING);
 				int r = new Random(System.currentTimeMillis()).nextInt(100);
 				if(r >= 0 && r < 25) {
-					opers.put(cos.getrID(), Status.EXECUTED);
+					state.getOpers().put(cos.getrID(), Status.EXECUTED);
 				} else if(r >= 25 && r < 50) {
-					opers.put(cos.getrID(), Status.FAILED);
+					state.getOpers().put(cos.getrID(), Status.FAILED);
 				} else if(r >= 50 && r < 75) {
-					opers.put(cos.getrID(), Status.REJECTED);
+					state.getOpers().put(cos.getrID(), Status.REJECTED);
 				} else {
-					opers.put(cos.getrID(), Status.EXECUTED);
+					state.getOpers().put(cos.getrID(), Status.EXECUTED);
 				}
 				break;
 			case REJECTED:
@@ -323,15 +330,15 @@ public class OpenGoodsMarket extends GenericProtocol {
 	
 	public void handleDepositMessage(Deposit d, Host from, short sourceProto, int channelID) {
 		// logger.info("Received deposit of " + d.getAmount() + " to " + d.getClientID().toString() + " from the Exchange (" + from + ")");
-		opers.put(d.getRid(), OperationStatusReply.Status.PENDING);
-		opers_body.put(d.getRid(), d);
+		state.getOpers().put(d.getRid(), OperationStatusReply.Status.PENDING);
+		this.state.getOpers_body().put(d.getRid(), d);
 		try {
 			if (d.checkSignature(exchangeIdentity)) {
-				opers.put(d.getRid(), OperationStatusReply.Status.PENDING);
+				state.getOpers().put(d.getRid(), OperationStatusReply.Status.PENDING);
 				logger.info("Received deposit of " + d.getAmount() + " to " + d.getClientID().toString() + " from the Exchange (" + from + ")");
 			} else {
 				// The deposit is not valid
-				opers.put(d.getRid(), OperationStatusReply.Status.REJECTED);
+				state.getOpers().put(d.getRid(), OperationStatusReply.Status.REJECTED);
 				return;
 			}
 		} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException | InvalidFormatException
@@ -342,33 +349,44 @@ public class OpenGoodsMarket extends GenericProtocol {
 		GenericClientReply ack = new GenericClientReply(d.getRid());
 		sendMessage(clientChannel, ack, sourceProto, from, 0);
 
-		// Send the deposit 
-		ClientRequest cr = new ClientRequest(new DepositOp(d).toByteArray());
-		sendRequest(cr, BlockChainProtocol.PROTO_ID);
+		ByteBuf buf = Unpooled.buffer();
+		try {
+			d.getSerializer().serializeBody(d, buf);
+			ClientRequest cr = new ClientRequest(buf.array());
+			sendRequest(cr, BlockChainProtocol.PROTO_ID);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 	
 	public void handleWithdrawalMessage(Withdrawal w, Host from, short sourceProto, int channelID) {
 		// logger.info("Received withdrawal of " + w.getAmount() + " to " + w.getClientID().toString() + " from the Exchange (" + from + ")");
 		try {
 			if (w.checkSignature(exchangeIdentity)) {
-				opers.put(w.getRid(), OperationStatusReply.Status.PENDING);
+				state.getOpers().put(w.getRid(), OperationStatusReply.Status.PENDING);
 				logger.info("Received deposit of " + w.getAmount() + " to " + w.getClientID().toString() + " from the Exchange (" + from + ")");
 			} else {
 				//The widthdrawal is not valid
-				opers.put(w.getRid(), OperationStatusReply.Status.REJECTED);
+				state.getOpers().put(w.getRid(), OperationStatusReply.Status.REJECTED);
 				return;
 			}
 		} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException | InvalidFormatException
 				| NoSignaturePresentException e) {
 			e.printStackTrace();
 		}
-		opers_body.put(w.getRid(), w);
+		this.state.getOpers_body().put(w.getRid(), w);
 		
 		GenericClientReply ack = new GenericClientReply(w.getRid());
 		sendMessage(clientChannel, ack, sourceProto, from, 0);
 
-		ClientRequest cr = new ClientRequest(new WithdrawalOp(w).toByteArray());
-		sendRequest(cr, BlockChainProtocol.PROTO_ID);
+		ByteBuf buf = Unpooled.buffer();
+		try {
+			w.getSerializer().serializeBody(w, buf);
+			ClientRequest cr = new ClientRequest(buf.array());
+			sendRequest(cr, BlockChainProtocol.PROTO_ID);
+		} catch (IOException e) {
+			e.printStackTrace();
+		};
 	}
 	
 	private void uponClientConnectionUp(ClientUpEvent event, int channel) {
@@ -378,82 +396,5 @@ public class OpenGoodsMarket extends GenericProtocol {
     private void uponClientConnectionDown(ClientDownEvent event, int channel) {
         logger.warn(event);
     }
-
-	// ------------------------------------- App state update methods ------------------------------------------- //
-
-	private void executeOperation(SignedProtoMessage msg){
-		if (msg instanceof IssueWant){
-			executeIssueWant((IssueWant) msg);
-		} 
-		else if (msg instanceof IssueOffer){
-			executeIssueOffer((IssueOffer) msg);
-		}
-		else if (msg instanceof Cancel){
-			executeCancel((Cancel) msg);
-		}
-		else if (msg instanceof Deposit){
-			executeDeposit((Deposit) msg);
-		}
-		else if (msg instanceof Withdrawal){
-			executeWithdrawal((Withdrawal) msg);
-		}
-		else {
-			logger.error("Unknown message type: " + msg.getClass());
-		}
-	}
-
-	private void executeIssueOffer(IssueOffer msg){
-		WantOfferKeys tempkeys = new WantOfferKeys(msg.getQuantity(), msg.getPricePerUnit());
-		if (wantHashMap.containsKey(tempkeys)){
-			logger.info("matched offer found");
-			wantHashMap.remove(tempkeys);
-		} else {
-			offerHashMap.put(tempkeys, new LinkedList<>());
-			offerHashMap.get(tempkeys).add(msg);
-		}
-	}
-
-	private void executeIssueWant(IssueWant msg){
-		WantOfferKeys tempkeys = new WantOfferKeys(msg.getQuantity(), msg.getPricePerUnit());
-		if (offerHashMap.containsKey(tempkeys)){
-			logger.info("matched offer found");
-			offerHashMap.remove(tempkeys);
-		} else {
-			wantHashMap.put(tempkeys, new LinkedList<>());
-			wantHashMap.get(tempkeys).add(msg);
-		}
-	}
-
-	private void executeCancel(Cancel msg){
-		SignedProtoMessage tempmsg = opers_body.get(msg.getrID());
-		if (tempmsg instanceof IssueWant){
-			WantOfferKeys tempkeys = new WantOfferKeys(
-				((IssueWant) tempmsg).getQuantity(), 
-				((IssueWant) tempmsg).getPricePerUnit()
-			);
-			wantHashMap.remove(tempkeys);
-		} 
-		else if (tempmsg instanceof IssueOffer){
-			WantOfferKeys tempkeys = new WantOfferKeys(
-				((IssueOffer) tempmsg).getQuantity(), 
-				((IssueOffer) tempmsg).getPricePerUnit()
-			);
-			offerHashMap.remove(tempkeys);
-		}
-		else {
-			logger.error("Unknown message type: " + tempmsg.getClass());
-		}
-	}
-
-	private void executeDeposit(Deposit msg){
-
-	}
-
-	private void executeWithdrawal(Withdrawal msg){
-
-	}
-	
-
-
 
 }

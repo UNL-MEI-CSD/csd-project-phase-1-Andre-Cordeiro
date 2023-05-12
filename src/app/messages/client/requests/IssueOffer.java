@@ -42,6 +42,11 @@ public class IssueOffer extends SignedProtoMessage {
 		this.setPricePerUnit(price);
 		
 	}
+
+	public IssueOffer()
+	{
+		super(IssueOffer.MESSAGE_ID);
+	}
 	
 	public static final SignedMessageSerializer<IssueOffer> serializer = new SignedMessageSerializer<IssueOffer>() {
 
@@ -86,7 +91,7 @@ public class IssueOffer extends SignedProtoMessage {
 	};
 	
 	@Override
-	public SignedMessageSerializer<? extends SignedProtoMessage> getSerializer() {
+	public SignedMessageSerializer<IssueOffer> getSerializer() {
 		return IssueOffer.serializer;
 	}
 
@@ -128,6 +133,17 @@ public class IssueOffer extends SignedProtoMessage {
 
 	public void setPricePerUnit(float pricePerUnit) {
 		this.pricePerUnit = pricePerUnit;
+	}
+
+	@Override
+	public String toString() {
+		return "IssueOffer ["+
+			"rid=" + rid + 
+			", cID=" + cID + 
+			", resourceType=" + resourceType + 
+			", quantity=" + quantity+ 
+			", pricePerUnit=" + pricePerUnit + 
+			"]";
 	}
 
 }
