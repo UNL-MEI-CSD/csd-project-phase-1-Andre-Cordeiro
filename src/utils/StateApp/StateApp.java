@@ -88,6 +88,16 @@ public class StateApp {
     public void executeOperation(byte[] op){
 		ByteBuf buf = Unpooled.copiedBuffer(op);
 		try {
+			Deposit deposit = new Deposit();
+			deposit = deposit.getSerializer().deserializeBody(buf);
+			executeDeposit(deposit);
+		} catch (Exception e) {/*do nothing*/}
+		try {
+			Withdrawal withdrawal = new Withdrawal();
+			withdrawal = withdrawal.getSerializer().deserializeBody(buf);
+			executeWithdrawal(withdrawal);
+		} catch (Exception e) {/*do nothing*/}
+		try {
 			IssueOffer offer = new IssueOffer();
 			offer = offer.getSerializer().deserializeBody(buf);
 			executeIssueOffer(offer);
@@ -102,20 +112,10 @@ public class StateApp {
 			cancel = cancel.getSerializer().deserializeBody(buf);
 			executeCancel(cancel);
 		} catch (Exception e) {/*do nothing*/}
-		try {
-			Deposit deposit = new Deposit();
-			deposit = deposit.getSerializer().deserializeBody(buf);
-			executeDeposit(deposit);
-		} catch (Exception e) {/*do nothing*/}
-		try {
-			Withdrawal withdrawal = new Withdrawal();
-			withdrawal = withdrawal.getSerializer().deserializeBody(buf);
-			executeWithdrawal(withdrawal);
-		} catch (Exception e) {/*do nothing*/}
 	}
 
 	private void executeIssueOffer(IssueOffer msg){
-		WantOfferKeys tempkeys = new WantOfferKeys(msg.getQuantity(), msg.getPricePerUnit());
+		WantOfferKeys tempkeys = new WantOfferKeys(msg.getResourceType(),msg.getQuantity(), msg.getPricePerUnit());
 		if (wantHashMap.containsKey(tempkeys)){
 			//remove the money from the buyer
 			clientAccountBalance.put(wantHashMap.get(tempkeys).get(0).getcID(), clientAccountBalance.get(wantHashMap.get(tempkeys).get(0).getcID()) - msg.getQuantity() * msg.getPricePerUnit());
@@ -129,7 +129,7 @@ public class StateApp {
 	}
 
 	private void executeIssueWant(IssueWant msg){
-		WantOfferKeys tempkeys = new WantOfferKeys(msg.getQuantity(), msg.getPricePerUnit());
+		WantOfferKeys tempkeys = new WantOfferKeys(msg.getResourceType(),msg.getQuantity(), msg.getPricePerUnit());
 		if (offerHashMap.containsKey(tempkeys)){
 			//remove the money from the buyer 
 			clientAccountBalance.put(msg.getcID(), clientAccountBalance.get(msg.getcID()) - msg.getQuantity() * msg.getPricePerUnit());
@@ -146,6 +146,7 @@ public class StateApp {
 		SignedProtoMessage tempmsg = opers_body.get(msg.getrID());
 		if (tempmsg instanceof IssueWant){
 			WantOfferKeys tempkeys = new WantOfferKeys(
+				((IssueWant) tempmsg).getResourceType(),
 				((IssueWant) tempmsg).getQuantity(), 
 				((IssueWant) tempmsg).getPricePerUnit()
 			);
@@ -153,6 +154,7 @@ public class StateApp {
 		} 
 		else if (tempmsg instanceof IssueOffer){
 			WantOfferKeys tempkeys = new WantOfferKeys(
+				((IssueOffer) tempmsg).getResourceType(),
 				((IssueOffer) tempmsg).getQuantity(), 
 				((IssueOffer) tempmsg).getPricePerUnit()
 			);
@@ -184,6 +186,16 @@ public class StateApp {
 		ByteBuf buf = Unpooled.buffer();
 		buf.writeBytes(operation);
 		try {
+			Deposit deposit = new Deposit();
+			deposit = deposit.getSerializer().deserializeBody(buf);
+			return isDepositValid(deposit);
+		} catch (Exception e) {/*do nothing*/}
+		try {
+			Withdrawal withdrawal = new Withdrawal();
+			withdrawal = withdrawal.getSerializer().deserializeBody(buf);
+			return isWithdrawalValid(withdrawal);
+		} catch (Exception e) {/*do nothing*/}
+		try {
 			IssueOffer offer = new IssueOffer();
 			offer = offer.getSerializer().deserializeBody(buf);
 			return isOfferValid(offer);
@@ -197,16 +209,6 @@ public class StateApp {
 			Cancel cancel = new Cancel();
 			cancel = cancel.getSerializer().deserializeBody(buf);
 			return isCancelValid(cancel);
-		} catch (Exception e) {/*do nothing*/}
-		try {
-			Deposit deposit = new Deposit();
-			deposit = deposit.getSerializer().deserializeBody(buf);
-			return isDepositValid(deposit);
-		} catch (Exception e) {/*do nothing*/}
-		try {
-			Withdrawal withdrawal = new Withdrawal();
-			withdrawal = withdrawal.getSerializer().deserializeBody(buf);
-			return isWithdrawalValid(withdrawal);
 		} catch (Exception e) {/*do nothing*/}
 		return false;
     }

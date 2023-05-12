@@ -186,11 +186,11 @@ public class BlockChainProtocol extends GenericProtocol {
 		// First check if the operation is valid
 		if (stateApp.isOperationValid(operation)) {
 			// then add it to the list of next operations
-			logger.info("Adding operation to the block");
-			// pendingOperations.add(operation);
-			// if (pendingOperations.size() == 10) {
-			// 	forgeBlock();
-			// }
+			// logger.info("Adding operation to the block : " + operationToString(operation));
+			pendingOperations.add(operation);
+			if (pendingOperations.size() == 10) {
+				forgeBlock();
+			}
 		} else {
 			logger.info("Operation is not valid");
 		}
@@ -275,7 +275,6 @@ public class BlockChainProtocol extends GenericProtocol {
 		if (waitingForViewChange) {
 			return;
 		}
-		// TODO: write this handler
 		logger.info("Received a commit notification with id: " + cn + " from: " + from);
 
 		// Deserialize the block to cut timers
@@ -288,7 +287,6 @@ public class BlockChainProtocol extends GenericProtocol {
 			byte[] operation = new byte[operationByteSize];
 			buffer.readBytes(operation);
 			stateApp.executeOperation(operation);
-			logger.info("Operation " + operationToString(operation) + " executed");
 		}
 
 	}
@@ -550,7 +548,7 @@ public class BlockChainProtocol extends GenericProtocol {
 	public byte[] serializeBlock(Block block) {
 		ByteBuf bufValidator = Unpooled.buffer();
 		try {
-			Host.serializer.deserialize(bufValidator);
+			Host.serializer.serialize(block.getValidater(),bufValidator);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -594,6 +592,16 @@ public class BlockChainProtocol extends GenericProtocol {
 	private String operationToString(byte[] op){
 		ByteBuf buf = Unpooled.copiedBuffer(op);
 		try {
+			Deposit deposit = new Deposit();
+			deposit = deposit.getSerializer().deserializeBody(buf);
+			return deposit.toString();
+		} catch (Exception e) {/*do nothing*/}
+		try {
+			Withdrawal withdrawal = new Withdrawal();
+			withdrawal = withdrawal.getSerializer().deserializeBody(buf);
+			return withdrawal.toString();
+		} catch (Exception e) {/*do nothing*/}
+		try {
 			IssueOffer offer = new IssueOffer();
 			offer = offer.getSerializer().deserializeBody(buf);
 			return offer.toString();
@@ -607,16 +615,6 @@ public class BlockChainProtocol extends GenericProtocol {
 			Cancel cancel = new Cancel();
 			cancel = cancel.getSerializer().deserializeBody(buf);
 			return cancel.toString();
-		} catch (Exception e) {/*do nothing*/}
-		try {
-			Deposit deposit = new Deposit();
-			deposit = deposit.getSerializer().deserializeBody(buf);
-			return deposit.toString();
-		} catch (Exception e) {/*do nothing*/}
-		try {
-			Withdrawal withdrawal = new Withdrawal();
-			withdrawal = withdrawal.getSerializer().deserializeBody(buf);
-			return withdrawal.toString();
 		} catch (Exception e) {/*do nothing*/}
 		return "Unknown operation";
 	}

@@ -2,13 +2,20 @@ package app;
 
 public class WantOfferKeys {
 
+    private String items;
+
     private int quantity;
 
     private Float price;
 
-    public WantOfferKeys(int quantity, float price) {
+    public WantOfferKeys(String items, int quantity, float price) {
+        this.items = items;
         this.quantity = quantity;
         this.price = price;
+    }
+
+    public String getItems() {
+        return items;
     }
 
     public int getQuantity() {

@@ -200,14 +200,14 @@ public class OpenGoodsMarket extends GenericProtocol {
 		
 		sendMessage(clientChannel, ack, sourceProto, from, 0);
 
-		// ByteBuf buf = Unpooled.buffer();
-		// try {
-		// 	io.getSerializer().serializeBody(io, buf);
-		// 	ClientRequest cr = new ClientRequest(buf.array());
-		// 	sendRequest(cr, BlockChainProtocol.PROTO_ID);
-		// } catch (IOException e) {
-		// 	e.printStackTrace();
-		// }
+		ByteBuf buf = Unpooled.buffer();
+		try {
+			io.getSerializer().serializeBody(io, buf);
+			ClientRequest cr = new ClientRequest(buf.array());
+			sendRequest(cr, BlockChainProtocol.PROTO_ID);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 	
 	public void handleIssueWantMessage(IssueWant iw, Host from, short sourceProto, int channelID ) {
@@ -232,14 +232,14 @@ public class OpenGoodsMarket extends GenericProtocol {
 		GenericClientReply ack = new GenericClientReply(iw.getRid());
 		sendMessage(clientChannel, ack, sourceProto, from, 0);
 
-		// ByteBuf buf = Unpooled.buffer();
-		// try {
-		// 	iw.getSerializer().serializeBody(iw, buf);
-		// 	ClientRequest cr = new ClientRequest(buf.array());
-		// 	sendRequest(cr, BlockChainProtocol.PROTO_ID);
-		// } catch (IOException e) {
-		// 	e.printStackTrace();
-		// }
+		ByteBuf buf = Unpooled.buffer();
+		try {
+			iw.getSerializer().serializeBody(iw, buf);
+			ClientRequest cr = new ClientRequest(buf.array());
+			sendRequest(cr, BlockChainProtocol.PROTO_ID);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 	
 	public void handleCancelMessage(Cancel c, Host from, short sourceProto, int channelID ) {
@@ -270,14 +270,14 @@ public class OpenGoodsMarket extends GenericProtocol {
 		GenericClientReply ack = new GenericClientReply(c.getrID());
 		sendMessage(clientChannel, ack, sourceProto, from, 0);
 
-		// ByteBuf buf = Unpooled.buffer();
-		// try {
-		// 	c.getSerializer().serializeBody(c, buf);
-		// 	ClientRequest cr = new ClientRequest(buf.array());
-		// 	sendRequest(cr, BlockChainProtocol.PROTO_ID);
-		// } catch (IOException e) {
-		// 	e.printStackTrace();
-		// }
+		ByteBuf buf = Unpooled.buffer();
+		try {
+			c.getSerializer().serializeBody(c, buf);
+			ClientRequest cr = new ClientRequest(buf.array());
+			sendRequest(cr, BlockChainProtocol.PROTO_ID);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 	
 	public void handleCheckOperationStatusMessage(CheckOperationStatus cos, Host from, short sourceProto, int channelID) {
@@ -378,14 +378,14 @@ public class OpenGoodsMarket extends GenericProtocol {
 		GenericClientReply ack = new GenericClientReply(w.getRid());
 		sendMessage(clientChannel, ack, sourceProto, from, 0);
 
-		// ByteBuf buf = Unpooled.buffer();
-		// try {
-		// 	w.getSerializer().serializeBody(w, buf);
-		// 	ClientRequest cr = new ClientRequest(buf.array());
-		// 	sendRequest(cr, BlockChainProtocol.PROTO_ID);
-		// } catch (IOException e) {
-		// 	e.printStackTrace();
-		// };
+		ByteBuf buf = Unpooled.buffer();
+		try {
+			w.getSerializer().serializeBody(w, buf);
+			ClientRequest cr = new ClientRequest(buf.array());
+			sendRequest(cr, BlockChainProtocol.PROTO_ID);
+		} catch (IOException e) {
+			e.printStackTrace();
+		};
 	}
 	
 	private void uponClientConnectionUp(ClientUpEvent event, int channel) {

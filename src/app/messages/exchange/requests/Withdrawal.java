@@ -62,9 +62,7 @@ public class Withdrawal extends SignedProtoMessage{
 			try {
 				cID = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(pk));
 			} catch (InvalidKeySpecException e) {
-				e.printStackTrace();
 			} catch (NoSuchAlgorithmException e) {
-				e.printStackTrace();
 			}
 			float a = in.readFloat();
 			return new Withdrawal(new UUID(msb,lsb), cID, a);
