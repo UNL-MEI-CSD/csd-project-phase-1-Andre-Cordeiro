@@ -18,16 +18,14 @@ import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.Properties;
 
+import app.messages.client.replies.CheckBalanceReply;
+import app.messages.client.requests.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import app.messages.client.replies.GenericClientReply;
 import app.messages.client.replies.OperationStatusReply;
 import app.messages.client.replies.OperationStatusReply.Status;
-import app.messages.client.requests.Cancel;
-import app.messages.client.requests.CheckOperationStatus;
-import app.messages.client.requests.IssueOffer;
-import app.messages.client.requests.IssueWant;
 import app.messages.exchange.requests.Deposit;
 import app.messages.exchange.requests.Withdrawal;
 import blockchain.BlockChainProtocol;
@@ -40,6 +38,7 @@ import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
 import pt.unl.fct.di.novasys.babel.exceptions.InvalidParameterException;
 import pt.unl.fct.di.novasys.babel.exceptions.ProtocolAlreadyExistsException;
+import pt.unl.fct.di.novasys.babel.generic.ProtoMessage;
 import pt.unl.fct.di.novasys.babel.generic.ProtoTimer;
 import pt.unl.fct.di.novasys.babel.generic.signed.InvalidFormatException;
 import pt.unl.fct.di.novasys.babel.generic.signed.NoSignaturePresentException;
@@ -159,12 +158,14 @@ public class OpenGoodsMarket extends GenericProtocol {
     	registerMessageSerializer(clientChannel, IssueWant.MESSAGE_ID, IssueWant.serializer);
     	registerMessageSerializer(clientChannel, Cancel.MESSAGE_ID, Cancel.serializer);
     	registerMessageSerializer(clientChannel, CheckOperationStatus.MESSAGE_ID, CheckOperationStatus.serializer);
-    	
+
     	registerMessageSerializer(clientChannel, Deposit.MESSAGE_ID, Deposit.serializer);
     	registerMessageSerializer(clientChannel, Withdrawal.MESSAGE_ID, Withdrawal.serializer);
+		registerMessageSerializer(clientChannel, CheckBalance.MESSAGE_ID, CheckBalance.serializer);
     	
     	registerMessageSerializer(clientChannel, OperationStatusReply.MESSAGE_ID, OperationStatusReply.serializer);
     	registerMessageSerializer(clientChannel, GenericClientReply.MESSAGE_ID, GenericClientReply.serializer);
+		registerMessageSerializer(clientChannel, CheckBalanceReply.MESSAGE_ID, CheckBalanceReply.serializer);
     	
     	registerMessageHandler(clientChannel, IssueOffer.MESSAGE_ID, this::handleIssueOfferMessage);
     	registerMessageHandler(clientChannel, IssueWant.MESSAGE_ID, this::handleIssueWantMessage);
@@ -173,12 +174,19 @@ public class OpenGoodsMarket extends GenericProtocol {
     	
     	registerMessageHandler(clientChannel, Deposit.MESSAGE_ID, this::handleDepositMessage);
     	registerMessageHandler(clientChannel, Withdrawal.MESSAGE_ID, this::handleWithdrawalMessage);
+		registerMessageHandler(clientChannel, CheckBalance.MESSAGE_ID, this::handleCheckBalanceMessage);
 	
     	registerChannelEventHandler(clientChannel, ClientUpEvent.EVENT_ID, this::uponClientConnectionUp);
         registerChannelEventHandler(clientChannel, ClientDownEvent.EVENT_ID, this::uponClientConnectionDown);
 
 	}
-	
+
+	private void handleCheckBalanceMessage(ProtoMessage protoMessage, Host host, short i, int i1) {
+	}
+
+	private <V extends ProtoMessage> void handleCheckBalanceMessage(V v, Host host, short i, Throwable throwable, int i1) {
+	}
+
 	public void handleIssueOfferMessage(IssueOffer io, Host from, short sourceProto, int channelID ) {
 		// logger.info("Received IssueOffer (" + io.getRid() + " from " + from + "(" + io.getcID().toString() + ")");
 

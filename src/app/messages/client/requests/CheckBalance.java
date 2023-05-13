@@ -18,7 +18,7 @@ public class CheckBalance extends SignedProtoMessage{
     public final static short MESSAGE_ID = 309;
 
     private PublicKey cID;
-    private UUID rID;
+    public UUID rID;
 
     public CheckBalance(UUID rID, PublicKey cID) {
         super(CheckBalance.MESSAGE_ID);
