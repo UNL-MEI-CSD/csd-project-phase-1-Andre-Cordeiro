@@ -1,4 +1,4 @@
-package consensus.timers;
+package useless;
 
 import pt.unl.fct.di.novasys.babel.generic.ProtoTimer;
 

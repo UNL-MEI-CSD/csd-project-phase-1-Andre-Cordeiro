@@ -5,9 +5,9 @@ import java.sql.Timestamp;
 public class OpsMapKey {
     
     private final Timestamp timestamp;
-    private final Integer opHash;
+    private final int opHash;
 
-    public OpsMapKey(Timestamp timestamp, Integer opHash) {
+    public OpsMapKey(Timestamp timestamp, int opHash) {
         this.timestamp = timestamp;
         this.opHash = opHash;
     }
@@ -16,12 +16,12 @@ public class OpsMapKey {
         return timestamp;
     }
 
-    public Integer getOpHash() {
+    public int getOpHash() {
         return opHash;
     }
 
     @Override
     public int hashCode() {
-        return timestamp.hashCode() + opHash.hashCode();
+        return timestamp.hashCode() + opHash;
     }
 }

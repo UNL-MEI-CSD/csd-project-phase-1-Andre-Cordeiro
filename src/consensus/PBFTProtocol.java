@@ -278,6 +278,7 @@ public class PBFTProtocol extends GenericProtocol {
 		//check if the node is the leader
 		if (view.isLeader(self)){
 
+			logger.info("Received propose request: " + req.hashCode());
 			OpsMapKey opsMapKey = new OpsMapKey(req.getTimestamp(), req.hashCode());
 			if (opsMap.containsOp(opsMapKey.hashCode())){
 				logger.warn("Request received :" + req + "is a duplicate");
@@ -287,6 +288,7 @@ public class PBFTProtocol extends GenericProtocol {
 			this.currentSeqN++;
 			int operationHash = opsMapKey.hashCode();
 			MessageBatchKey mbKey = new MessageBatchKey(operationHash, currentSeqN, view.getViewNumber());
+			logger.info("Proposing request: " + currentSeqN);
 			PrePrepareMessage prePrepareMsg = new PrePrepareMessage(mbKey,req.getBlock(),cryptoName);
 
 			try {
@@ -302,7 +304,7 @@ public class PBFTProtocol extends GenericProtocol {
 					sendMessage(prePrepareMsg, node);
 				} else {
 					mb.addMessage(mbKey.hashCode());
-					opsMap.addOp(opsMapKey.hashCode(), req.getBlock());
+					opsMap.addOp(mbKey.hashCode(), req.getBlock());
 				}
 			});
 		}
@@ -380,21 +382,26 @@ public class PBFTProtocol extends GenericProtocol {
 		
 		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN() < highestSeqN){
 			if (msg.getBatchKey().getViewNumber() != view.getViewNumber())
-				logger.warn("Received a pre-prepare message with an invalid view number: " + msg);
+				logger.warn("Received a pre-prepare message with an invalid view number: " + msg + " from " + from);
 			else {
-				logger.warn("Received a pre-prepare message with an invalid sequence number: " + msg);
+				logger.warn("Received a pre-prepare message with an invalid sequence number: " + msg + " from " + from);
 			}
 			return;
 		}
 
 		if(checkValidMessage(msg,from)){
 			try {
-				opsMap.addOp(msg.getBatchKey().getOpsHash(), msg.getOperation());
+				opsMap.addOp(msg.getBatchKey().hashCode(), msg.getOperation());
+				logger.info("Pre-prepare message added to the opsMap " + msg.getBatchKey().hashCode());
 				mb.addMessage(msg.getBatchKey().hashCode());
 			}
 			catch (RuntimeException e){
-				logger.warn("Received a duplicate pre-prepare message: " + msg);
-				return;
+				// logger.warn("Received a duplicate pre-prepare message: " + msg +" "+ mb.size()  + " " + e.getMessage() + " from " + from);
+				// logger.warn("Keys in the mb: " + msg.getBatchKey().hashCode());
+				// for (int key : mb.getKeys()){
+				// 	logger.warn("Key: " + key);	
+				// }
+				// return;
 			}
 			
 			//send a prepare message to all nodes in the view
@@ -426,11 +433,13 @@ public class PBFTProtocol extends GenericProtocol {
 		// 	return;
 		// }
 
+		logger.info("Received a prepare message: " + msg + " from " + from);
+
 		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN() < highestSeqN){
 			if (msg.getBatchKey().getViewNumber() != view.getViewNumber())
-				logger.warn("Received a prepare message with an invalid view number: " + msg);
+				logger.warn("Received a prepare message with an invalid view number: " + msg + " from " + from);
 			else {
-				logger.warn("Received a prepare message with an invalid sequence number: " + msg);
+				logger.warn("Received a prepare message with an invalid sequence number: " + msg + " from " + from);
 			}
 			return;
 		}
@@ -472,11 +481,11 @@ public class PBFTProtocol extends GenericProtocol {
 		// 	return;
 		// }
 
+		logger.info("Received a commit message: " + msg + " from " + from);
+
 		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN() < highestSeqN){
-			if (msg.getBatchKey().getViewNumber() != view.getViewNumber())
-				logger.warn("Received a commit message with an invalid view number: " + msg);
-			else {
-				logger.warn("Received a commit message with an invalid sequence number: " + msg);
+			if (msg.getBatchKey().getViewNumber() != view.getViewNumber()) {
+				logger.warn("Received a commit message with an invalid view number: " + msg + " from " + from);
 			}
 			return;
 		}	
@@ -489,22 +498,13 @@ public class PBFTProtocol extends GenericProtocol {
 			} 
 			
 			int commitMessagesReceived = 0;
-			try {
-				int hash = msg.getBatchKey().hashCode();
-				if (mb.containsMessage(hash)) {
-					commitMessagesReceived = mb.addCommitMessage(hash, from);
-				}
-				else {
-					logger.warn("Received a commit message for an unknown operation: " + msg);
-					return;
-				}
-			} catch (RuntimeException e){
-				logger.warn("Received a unknown commit message: " + msg + mb.getValues(msg.getBatchKey().hashCode()));
-				return;
+			int hash = msg.getBatchKey().hashCode();
+			if (mb.containsMessage(hash)) {
+				commitMessagesReceived = mb.addCommitMessage(hash, from);
 			}
 			if (commitMessagesReceived == failureNumber + 1) {
 				newHighestSeqN(msg.getBatchKey().getSeqN());
-				byte[] block = opsMap.getOp(msg.getBatchKey().getOpsHash());
+				byte[] block = opsMap.getOp(msg.getBatchKey().hashCode());
 				try {
 					UUID.fromString(new String(block));
 					// send a view change notification to the blockchain
@@ -527,6 +527,9 @@ public class PBFTProtocol extends GenericProtocol {
 						e.printStackTrace();
 					}
 				}
+				// discard the message and the op
+				mb.removeMessage(hash);
+				opsMap.removeOp(msg.getBatchKey().hashCode());
 			}
 		}
 	}

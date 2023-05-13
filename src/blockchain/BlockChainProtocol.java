@@ -15,6 +15,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Queue;
 import java.util.UUID;
 
 import org.apache.logging.log4j.LogManager;
@@ -95,6 +96,7 @@ public class BlockChainProtocol extends GenericProtocol {
 	private BlockChain blockChain;
 	private int lastBlockNumber; // sequence number equivalent
 	private List<byte[]> pendingOperations;
+	private Queue<ProposeRequest> pendingRequests;
 	
 	public BlockChainProtocol(Properties props) throws NumberFormatException, UnknownHostException {
 		super(BlockChainProtocol.PROTO_NAME, BlockChainProtocol.PROTO_ID);
@@ -131,6 +133,8 @@ public class BlockChainProtocol extends GenericProtocol {
 		this.leader = false;
 		this.unhandledRequestsMessages = new HashMap<>();
 		this.pendingRequestsTimers = new HashMap<>();
+		this.pendingRequests = new LinkedList<>();
+
 
 		// Request Handlers
 		registerRequestHandler(ClientRequest.REQUEST_ID, this::handleClientRequest);
@@ -166,15 +170,22 @@ public class BlockChainProtocol extends GenericProtocol {
 		// Create a new block
 		byte[] signature;
 		try {
+			lastBlockNumber ++;
 			signature = SignaturesHelper.generateSignature(operationsBytes, key);
-			Block block = new Block(self, blockChain.getLastBlock().hashCode(), lastBlockNumber + 1, signature,
+			Block block = new Block(self, blockChain.getLastBlock().hashCode(), lastBlockNumber, signature,
 					operationsBytes);
 			// generate the propose request
 			byte[] blockBytes = serializeBlock(block);
 			byte[] blockSignature = SignaturesHelper.generateSignature(blockBytes, key);
 			ProposeRequest proposeRequest = new ProposeRequest(blockBytes, blockSignature);
 			// send the propose request to the PBFTProtocol
-			sendRequest(proposeRequest, PBFTProtocol.PROTO_ID);
+			if (pendingRequests.isEmpty()){
+				pendingRequests.add(proposeRequest);
+				sendRequest(proposeRequest, PBFTProtocol.PROTO_ID);
+			} else {
+				pendingRequests.add(proposeRequest);
+			}
+			logger.info("Propose to PBFTProtocol the block : " + block.getBlockNumber());
 		} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException e) {
 			e.printStackTrace();
 		}
@@ -275,12 +286,20 @@ public class BlockChainProtocol extends GenericProtocol {
 		if (waitingForViewChange) {
 			return;
 		}
-		logger.info("Received a commit notification for block " + (lastBlockNumber+1));
-		logger.info ("Stats: " + stateApp.countOperationStatus());
+
+		//order Request with a queue.
+		if (this.leader){
+			pendingRequests.remove();
+			if (!pendingRequests.isEmpty()) {
+				sendRequest(pendingRequests.peek(), PBFTProtocol.PROTO_ID);
+			}
+		}
 
 		// Deserialize the block to cut timers
 		Block block = deserializeBlock(cn.getBlock());
-
+		logger.info("Received a commit notification for block " + block.getBlockNumber());
+		// logger.info ("Stats: " + stateApp.countOperationStatus());
+		
 		ByteBuf buffer = Unpooled.copiedBuffer(block.getOperations());
 		// cancel the timer for each request and execute the request
 		for (int i = 0; i < 10; i++) {
@@ -291,12 +310,11 @@ public class BlockChainProtocol extends GenericProtocol {
 			cancelAllTimersForRequest(operation);
 		}
 
-		logger.info ("Stats after: " + stateApp.countOperationStatus());
+		// logger.info ("Stats after: " + stateApp.countOperationStatus());
 
 		// add the block to the blockchain
 		blockChain.addBlock(block);
-		// update the last block number
-		lastBlockNumber++;
+
 	}
 
 	public void handleInitialNotification(InitialNotification in, short from) {
@@ -584,6 +602,7 @@ public class BlockChainProtocol extends GenericProtocol {
 		Host validaterHost;
 		try {
 			validaterHost = Host.serializer.deserialize(validater);
+			logger.info("Validater: " + validaterHost);
 			int hashPreviousBlock = buf.readInt();
 			int blockNumber = buf.readInt();
 			int signatureLength = buf.readInt();

@@ -92,27 +92,32 @@ public class StateApp {
 			deposit = deposit.getSerializer().deserializeBody(buf);
 			executeDeposit(deposit);
 			changeOpers(deposit.getRid(), OperationStatusReply.Status.EXECUTED);
+			return;
 		} catch (Exception e) {/*do nothing*/}
 		try {
 			Withdrawal withdrawal = new Withdrawal();
 			withdrawal = withdrawal.getSerializer().deserializeBody(buf);
 			executeWithdrawal(withdrawal);
 			changeOpers(withdrawal.getRid(), OperationStatusReply.Status.EXECUTED);
+			return;
 		} catch (Exception e) {/*do nothing*/}
 		try {
 			IssueOffer offer = new IssueOffer();
 			offer = offer.getSerializer().deserializeBody(buf);
 			executeIssueOffer(offer);
+			return;
 		} catch (Exception e) {/*do nothing*/}
 		try {
 			IssueWant want = new IssueWant();
 			want = want.getSerializer().deserializeBody(buf);
 			executeIssueWant(want);
+			return;
 		} catch (Exception e) {/*do nothing*/}
 		try {
 			Cancel cancel = new Cancel();
 			cancel = cancel.getSerializer().deserializeBody(buf);
 			executeCancel(cancel);
+			return;
 		} catch (Exception e) {/*do nothing*/}
 	}
 
