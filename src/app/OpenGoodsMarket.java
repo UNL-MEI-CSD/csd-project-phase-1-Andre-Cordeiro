@@ -17,7 +17,6 @@ import java.security.cert.CertificateException;
 import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.Properties;
-import java.util.Random;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -41,6 +40,7 @@ import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
 import pt.unl.fct.di.novasys.babel.exceptions.InvalidParameterException;
 import pt.unl.fct.di.novasys.babel.exceptions.ProtocolAlreadyExistsException;
+import pt.unl.fct.di.novasys.babel.generic.ProtoTimer;
 import pt.unl.fct.di.novasys.babel.generic.signed.InvalidFormatException;
 import pt.unl.fct.di.novasys.babel.generic.signed.NoSignaturePresentException;
 import pt.unl.fct.di.novasys.channel.simpleclientserver.SimpleServerChannel;
@@ -176,7 +176,8 @@ public class OpenGoodsMarket extends GenericProtocol {
 	
     	registerChannelEventHandler(clientChannel, ClientUpEvent.EVENT_ID, this::uponClientConnectionUp);
         registerChannelEventHandler(clientChannel, ClientDownEvent.EVENT_ID, this::uponClientConnectionDown);
-   	}
+
+	}
 	
 	public void handleIssueOfferMessage(IssueOffer io, Host from, short sourceProto, int channelID ) {
 		// logger.info("Received IssueOffer (" + io.getRid() + " from " + from + "(" + io.getcID().toString() + ")");
@@ -184,7 +185,7 @@ public class OpenGoodsMarket extends GenericProtocol {
 		// check if the signature is valid
 		try {
 			if (io.checkSignature(io.getcID())){
-				state.putOpers(io.getRid(), OperationStatusReply.Status.PENDING);
+				state.putOpers(io.getRid(), OperationStatusReply.Status.UNKOWN);
 			} else {
 				state.putOpers(io.getRid(), OperationStatusReply.Status.REJECTED);
 				return;
@@ -194,10 +195,9 @@ public class OpenGoodsMarket extends GenericProtocol {
 			e.printStackTrace();
 		}
 
-		this.state.getOpers_body().put(io.getRid(), io);
+		this.state.putOpersBody(io.getRid(), io);
 		
 		GenericClientReply ack = new GenericClientReply(io.getRid());
-		
 		sendMessage(clientChannel, ack, sourceProto, from, 0);
 
 		ByteBuf buf = Unpooled.buffer();
@@ -216,7 +216,7 @@ public class OpenGoodsMarket extends GenericProtocol {
 		// Verify the signature of the message
 		try {
 			if (iw.checkSignature(iw.getcID())){
-				state.putOpers(iw.getRid(), OperationStatusReply.Status.PENDING);
+				state.putOpers(iw.getRid(), OperationStatusReply.Status.UNKOWN);
 			} else {
 				state.putOpers(iw.getRid(), OperationStatusReply.Status.REJECTED);
 				return;
@@ -226,7 +226,7 @@ public class OpenGoodsMarket extends GenericProtocol {
 			e.printStackTrace();
 		}
 		
-		this.state.getOpers_body().put(iw.getRid(), iw);
+		this.state.putOpersBody(iw.getRid(), iw);
 		
 		GenericClientReply ack = new GenericClientReply(iw.getRid());
 		sendMessage(clientChannel, ack, sourceProto, from, 0);
@@ -317,8 +317,8 @@ public class OpenGoodsMarket extends GenericProtocol {
 		// logger.info("Received deposit of " + d.getAmount() + " to " + d.getClientID().toString() + " from the Exchange (" + from + ")");
 		try {
 			if (d.checkSignature(exchangeIdentity)) {
-				state.putOpers(d.getRid(), OperationStatusReply.Status.PENDING);
-				this.state.getOpers_body().put(d.getRid(), d);
+				state.putOpers(d.getRid(), OperationStatusReply.Status.UNKOWN);
+				this.state.putOpersBody(d.getRid(), d);
 				// logger.info("Received deposit of " + d.getAmount() + " to " + d.getClientID().toString() + " from the Exchange (" + from + ")");
 			} else {
 				// The deposit is not valid
@@ -347,8 +347,8 @@ public class OpenGoodsMarket extends GenericProtocol {
 		// logger.info("Received withdrawal of " + w.getAmount() + " to " + w.getClientID().toString() + " from the Exchange (" + from + ")");
 		try {
 			if (w.checkSignature(exchangeIdentity)) {
-				state.putOpers(w.getRid(), OperationStatusReply.Status.PENDING);
-				logger.info("Received deposit of " + w.getAmount() + " to " + w.getClientID().toString() + " from the Exchange (" + from + ")");
+				state.putOpers(w.getRid(), OperationStatusReply.Status.UNKOWN);
+				// logger.info("Received deposit of " + w.getAmount() + " to " + w.getClientID().toString() + " from the Exchange (" + from + ")");
 			} else {
 				//The widthdrawal is not valid
 				state.putOpers(w.getRid(), OperationStatusReply.Status.REJECTED);
@@ -358,7 +358,7 @@ public class OpenGoodsMarket extends GenericProtocol {
 				| NoSignaturePresentException e) {
 			e.printStackTrace();
 		}
-		this.state.getOpers_body().put(w.getRid(), w);
+		this.state.putOpersBody(w.getRid(), w);
 		
 		GenericClientReply ack = new GenericClientReply(w.getRid());
 		sendMessage(clientChannel, ack, sourceProto, from, 0);

@@ -124,7 +124,6 @@ public class BlockChainProtocol extends GenericProtocol {
 			key = Crypto.getPrivateKey(cryptoName, props);
 		} catch (UnrecoverableKeyException | KeyStoreException | NoSuchAlgorithmException | CertificateException
 				| IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 
@@ -158,12 +157,12 @@ public class BlockChainProtocol extends GenericProtocol {
 	private void forgeBlock() {
 
 		ByteBuf buffer = Unpooled.buffer();
-		for (byte[] operation : pendingOperations) {
-			buffer.writeShort(operation.length);
-			buffer.writeBytes(operation);
+		for (int i = 0; i < 10; i++) {
+			buffer.writeShort(pendingOperations.get(0).length);
+			buffer.writeBytes(pendingOperations.get(0));
+			pendingOperations.remove(0);
 		}
 		byte[] operationsBytes = buffer.array();
-		pendingOperations.clear();
 		// Create a new block
 		byte[] signature;
 		try {
@@ -237,10 +236,11 @@ public class BlockChainProtocol extends GenericProtocol {
 				System.exit(1); // Catastrophic failure!!!
 			}
 			sendMessage(msg, this.view.getLeader());
+
+			// Start a timer for this request
+			CheckUnhandledRequestsPeriodicTimer timer = new CheckUnhandledRequestsPeriodicTimer(req.getRequestId());
+			pendingRequestsTimers.put(req.getRequestId(), setupTimer(timer, checkRequestsPeriod));
 		}
-		// Start a timer for this request
-		CheckUnhandledRequestsPeriodicTimer timer = new CheckUnhandledRequestsPeriodicTimer(req.getRequestId());
-		pendingRequestsTimers.put(req.getRequestId(), setupTimer(timer, checkRequestsPeriod));
 	}
 
 	/* ----------------------------------------------- ------------- ------------------------------------------ */
@@ -275,7 +275,8 @@ public class BlockChainProtocol extends GenericProtocol {
 		if (waitingForViewChange) {
 			return;
 		}
-		logger.info("Received a commit notification with id: " + cn + " from: " + from);
+		logger.info("Received a commit notification for block " + (lastBlockNumber+1));
+		logger.info ("Stats: " + stateApp.countOperationStatus());
 
 		// Deserialize the block to cut timers
 		Block block = deserializeBlock(cn.getBlock());
@@ -290,11 +291,12 @@ public class BlockChainProtocol extends GenericProtocol {
 			cancelAllTimersForRequest(operation);
 		}
 
+		logger.info ("Stats after: " + stateApp.countOperationStatus());
+
 		// add the block to the blockchain
 		blockChain.addBlock(block);
 		// update the last block number
 		lastBlockNumber++;
-
 	}
 
 	public void handleInitialNotification(InitialNotification in, short from) {
@@ -472,8 +474,7 @@ public class BlockChainProtocol extends GenericProtocol {
 			return;
 		}
 
-		if (!stateApp.isOperationPending(t.getRequestID())) {
-			logger.info("Fin de timer avec" + stateApp.getOperationStatus(t.getRequestID()));
+		if (!stateApp.isOperationUnkown(t.getRequestID())) {
 			return;
 		}
 		// Send a StartViewChange message to his PBFT protocol

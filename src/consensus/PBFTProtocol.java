@@ -128,7 +128,6 @@ public class PBFTProtocol extends GenericProtocol {
 			pubKey = Crypto.getPublicKey(cryptoName, props);
 		} catch (UnrecoverableKeyException | KeyStoreException | NoSuchAlgorithmException | CertificateException
 				| IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 
@@ -174,7 +173,6 @@ public class PBFTProtocol extends GenericProtocol {
 		
 		try { Thread.sleep(10 * 1000); } catch (InterruptedException e) { }
 		
-		// TODO: Open connections to all nodes in the (initial) view
 		view.getView().forEach(this::openConnection);
 		// leaderTimer = setupPeriodicTimer(LeaderTimer.instance, LEADER_TIMEOUT, LEADER_TIMEOUT / 3);
 
@@ -190,7 +188,6 @@ public class PBFTProtocol extends GenericProtocol {
     //     if (!view.isLeader(self) && (System.currentTimeMillis() - lastLeaderOp > LEADER_TIMEOUT)){
     //         logger.error("Leader timeout expired. Triggering view change.");
 	// 		//startViewChange();
-	// 		//TODO: Implement correct view change
 	// 	}
     // }
 
@@ -218,7 +215,6 @@ public class PBFTProtocol extends GenericProtocol {
 	// 	try {
 	// 		vcm.signMessage(privKey);
 	// 	} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException | InvalidSerializerException e) {
-	// 		// TODO Auto-generated catch block
 	// 		e.printStackTrace();
 	// 	}
 	// 	view.getView().forEach(h -> {
@@ -382,7 +378,7 @@ public class PBFTProtocol extends GenericProtocol {
 		// 	return;
 		// }
 		
-		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN() < currentSeqN){
+		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN() < highestSeqN){
 			if (msg.getBatchKey().getViewNumber() != view.getViewNumber())
 				logger.warn("Received a pre-prepare message with an invalid view number: " + msg);
 			else {
@@ -430,7 +426,7 @@ public class PBFTProtocol extends GenericProtocol {
 		// 	return;
 		// }
 
-		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN() < currentSeqN){
+		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN() < highestSeqN){
 			if (msg.getBatchKey().getViewNumber() != view.getViewNumber())
 				logger.warn("Received a prepare message with an invalid view number: " + msg);
 			else {
@@ -476,7 +472,7 @@ public class PBFTProtocol extends GenericProtocol {
 		// 	return;
 		// }
 
-		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN() < currentSeqN){
+		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN() < highestSeqN){
 			if (msg.getBatchKey().getViewNumber() != view.getViewNumber())
 				logger.warn("Received a commit message with an invalid view number: " + msg);
 			else {
@@ -487,12 +483,10 @@ public class PBFTProtocol extends GenericProtocol {
 
 		if (checkValidMessage(msg, from)) {
 
-			if (currentSeqN < highestSeqN) {
+			if (msg.getBatchKey().getSeqN() < highestSeqN) {
 				logger.warn("Received a commit message for a lower sequence number: " + msg);
 				return;
-			} else if (currentSeqN > highestSeqN) {
-				newHighestSeqN(currentSeqN);
-			}
+			} 
 			
 			int commitMessagesReceived = 0;
 			try {
@@ -509,6 +503,7 @@ public class PBFTProtocol extends GenericProtocol {
 				return;
 			}
 			if (commitMessagesReceived == failureNumber + 1) {
+				newHighestSeqN(msg.getBatchKey().getSeqN());
 				byte[] block = opsMap.getOp(msg.getBatchKey().getOpsHash());
 				try {
 					UUID.fromString(new String(block));

@@ -91,11 +91,13 @@ public class StateApp {
 			Deposit deposit = new Deposit();
 			deposit = deposit.getSerializer().deserializeBody(buf);
 			executeDeposit(deposit);
+			changeOpers(deposit.getRid(), OperationStatusReply.Status.EXECUTED);
 		} catch (Exception e) {/*do nothing*/}
 		try {
 			Withdrawal withdrawal = new Withdrawal();
 			withdrawal = withdrawal.getSerializer().deserializeBody(buf);
 			executeWithdrawal(withdrawal);
+			changeOpers(withdrawal.getRid(), OperationStatusReply.Status.EXECUTED);
 		} catch (Exception e) {/*do nothing*/}
 		try {
 			IssueOffer offer = new IssueOffer();
@@ -122,9 +124,13 @@ public class StateApp {
 			//add the money to the seller
 			clientAccountBalance.put(msg.getcID(), clientAccountBalance.get(msg.getcID()) + msg.getQuantity() * msg.getPricePerUnit());
 			wantHashMap.remove(tempkeys);
+			// Set the operation as executed
+			changeOpers(msg.getRid(), OperationStatusReply.Status.EXECUTED);
+			changeOpers(wantHashMap.get(tempkeys).get(0).getRid(), OperationStatusReply.Status.EXECUTED);
 		} else {
 			offerHashMap.put(tempkeys, new LinkedList<>());
 			offerHashMap.get(tempkeys).add(msg);
+			changeOpers(msg.getRid(), OperationStatusReply.Status.PENDING);
 		}
 	}
 
@@ -136,9 +142,13 @@ public class StateApp {
 			//add the money to the seller
 			clientAccountBalance.put(offerHashMap.get(tempkeys).get(0).getcID(), clientAccountBalance.get(offerHashMap.get(tempkeys).get(0).getcID()) + msg.getQuantity() * msg.getPricePerUnit());
 			offerHashMap.remove(tempkeys);
+			// Set the operation as executed
+			changeOpers(msg.getRid(), OperationStatusReply.Status.EXECUTED);
+			changeOpers(offerHashMap.get(tempkeys).get(0).getRid(), OperationStatusReply.Status.EXECUTED);
 		} else {
 			wantHashMap.put(tempkeys, new LinkedList<>());
 			wantHashMap.get(tempkeys).add(msg);
+			changeOpers(msg.getRid(), OperationStatusReply.Status.PENDING);
 		}
 	}
 
@@ -151,6 +161,8 @@ public class StateApp {
 				((IssueWant) tempmsg).getPricePerUnit()
 			);
 			wantHashMap.remove(tempkeys);
+			// Set the operation as cancelled
+			changeOpers(msg.getrID(), OperationStatusReply.Status.CANCELLED);
 		} 
 		else if (tempmsg instanceof IssueOffer){
 			WantOfferKeys tempkeys = new WantOfferKeys(
@@ -159,6 +171,8 @@ public class StateApp {
 				((IssueOffer) tempmsg).getPricePerUnit()
 			);
 			offerHashMap.remove(tempkeys);
+			// Set the operation as cancelled
+			changeOpers(msg.getrID(), OperationStatusReply.Status.CANCELLED);
 		}
 		else {
             throw new RuntimeException("Unknown message type: " + tempmsg.getClass());
@@ -246,9 +260,9 @@ public class StateApp {
 		}
 	}
 
-	public boolean isOperationPending(UUID rID){
+	public boolean isOperationUnkown(UUID rID){
 		if (opers.containsKey(rID)){
-			return opers.get(rID) == OperationStatusReply.Status.PENDING;
+			return opers.get(rID) == OperationStatusReply.Status.UNKOWN;
 		} else {
 			return false;
 		}
@@ -266,8 +280,38 @@ public class StateApp {
 		opers.put(rID, status);
 	}
 
+	public void putOpersBody(UUID rID, SignedProtoMessage msg){
+		opers_body.put(rID, msg);
+	}
+
 	public void changeOpers(UUID rID, OperationStatusReply.Status status){
-		opers.replace(rID, status);
+		if (opers.containsKey(rID)){
+			opers.replace(rID, status);
+		} else {
+			opers.put(rID, status);
+		}
+	}
+
+	public String countOperationStatus(){
+		int pending = 0;
+		int executed = 0;
+		int cancelled = 0;
+		int unkown = 0;
+		for (OperationStatusReply.Status status : opers.values()) {
+			if (status == OperationStatusReply.Status.PENDING){
+				pending++;
+			} else if (status == OperationStatusReply.Status.EXECUTED){
+				executed++;
+			} else if (status == OperationStatusReply.Status.CANCELLED){
+				cancelled++;
+			} else if (status == OperationStatusReply.Status.UNKOWN){
+				unkown++;
+			}
+		}
+		return "Pending: " + pending + "\n" + 
+			"Executed: " + executed + "\n" + 
+			"Cancelled: " + cancelled + "\n" + 
+			"Unkown: " + unkown + "\n";
 	}
 
 }
