@@ -246,4 +246,28 @@ public class StateApp {
 		}
 	}
 
+	public boolean isOperationPending(UUID rID){
+		if (opers.containsKey(rID)){
+			return opers.get(rID) == OperationStatusReply.Status.PENDING;
+		} else {
+			return false;
+		}
+	}
+
+	public String getOperationStatus(UUID rID){
+		if (opers.containsKey(rID)){
+			return opers.get(rID).toString();
+		} else {
+			return "NOT FOUND";
+		}
+	}
+
+	public void putOpers(UUID rID, OperationStatusReply.Status status){
+		opers.put(rID, status);
+	}
+
+	public void changeOpers(UUID rID, OperationStatusReply.Status status){
+		opers.replace(rID, status);
+	}
+
 }

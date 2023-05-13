@@ -287,7 +287,13 @@ public class BlockChainProtocol extends GenericProtocol {
 			byte[] operation = new byte[operationByteSize];
 			buffer.readBytes(operation);
 			stateApp.executeOperation(operation);
+			cancelAllTimersForRequest(operation);
 		}
+
+		// add the block to the blockchain
+		blockChain.addBlock(block);
+		// update the last block number
+		lastBlockNumber++;
 
 	}
 
@@ -466,6 +472,10 @@ public class BlockChainProtocol extends GenericProtocol {
 			return;
 		}
 
+		if (!stateApp.isOperationPending(t.getRequestID())) {
+			logger.info("Fin de timer avec" + stateApp.getOperationStatus(t.getRequestID()));
+			return;
+		}
 		// Send a StartViewChange message to his PBFT protocol
 		logger.info("Leader suspect timer expired for request " + t.getRequestID());
 		this.unhandledRequestsMessages.remove(t.getRequestID());
@@ -588,6 +598,55 @@ public class BlockChainProtocol extends GenericProtocol {
 		}
 		return null;
 	}
+
+	private void cancelAllTimersForRequest(byte[] operation) {
+		ByteBuf buf = Unpooled.copiedBuffer(operation);
+		try {
+			Deposit deposit = new Deposit();
+			deposit = deposit.getSerializer().deserializeBody(buf);
+			if (this.pendingRequestsTimers.get(deposit.getRid()) != null)
+				cancelTimer(this.pendingRequestsTimers.get(deposit.getRid()));
+			if (this.unhandledRequestsMessages.get(deposit.getRid()) != null)
+				this.unhandledRequestsMessages.remove(deposit.getRid());
+		} catch (Exception e) {/*do nothing*/}
+		try {
+			Withdrawal withdrawal = new Withdrawal();
+			withdrawal = withdrawal.getSerializer().deserializeBody(buf);
+			if (this.pendingRequestsTimers.get(withdrawal.getRid()) != null)
+				cancelTimer(this.pendingRequestsTimers.get(withdrawal.getRid()));
+			if (this.unhandledRequestsMessages.get(withdrawal.getRid()) != null)
+				this.unhandledRequestsMessages.remove(withdrawal.getRid());
+		} catch (Exception e) {/*do nothing*/}
+		try {
+			IssueOffer offer = new IssueOffer();
+			offer = offer.getSerializer().deserializeBody(buf);
+			if (this.pendingRequestsTimers.get(offer.getRid()) != null)
+				cancelTimer(this.pendingRequestsTimers.get(offer.getRid()));
+			if (this.unhandledRequestsMessages.get(offer.getRid()) != null)
+				this.unhandledRequestsMessages.remove(offer.getRid());
+		} catch (Exception e) {/*do nothing*/}
+		try {
+			IssueWant want = new IssueWant();
+			want = want.getSerializer().deserializeBody(buf);
+			if (this.pendingRequestsTimers.get(want.getRid()) != null)
+				cancelTimer(this.pendingRequestsTimers.get(want.getRid()));
+			if (this.unhandledRequestsMessages.get(want.getRid()) != null)
+				this.unhandledRequestsMessages.remove(want.getRid());
+		} catch (Exception e) {/*do nothing*/}
+		try {
+			Cancel cancel = new Cancel();
+			cancel = cancel.getSerializer().deserializeBody(buf);
+			if (this.pendingRequestsTimers.get(cancel.getrID()) != null)
+				cancelTimer(this.pendingRequestsTimers.get(cancel.getrID()));
+			if (this.unhandledRequestsMessages.get(cancel.getrID()) != null)
+				this.unhandledRequestsMessages.remove(cancel.getrID());
+		} catch (Exception e) {/*do nothing*/}
+	}
+
+	/* ----------------------------------------------- ------------- ------------------------------------------ */
+	/* ----------------------------------------------- DEBUG FUNCTION ----------------------------------------- */
+	/* ----------------------------------------------- ------------- ------------------------------------------ */
+
 
 	private String operationToString(byte[] op){
 		ByteBuf buf = Unpooled.copiedBuffer(op);
