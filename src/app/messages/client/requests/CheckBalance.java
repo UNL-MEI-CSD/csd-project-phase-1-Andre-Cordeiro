@@ -85,6 +85,7 @@ public class CheckBalance extends SignedProtoMessage{
     }
 
 
-    
-    
+    public PublicKey getcID() {
+        return cID;
+    }
 }

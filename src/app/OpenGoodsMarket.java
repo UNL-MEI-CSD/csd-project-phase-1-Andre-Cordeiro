@@ -174,18 +174,26 @@ public class OpenGoodsMarket extends GenericProtocol {
     	
     	registerMessageHandler(clientChannel, Deposit.MESSAGE_ID, this::handleDepositMessage);
     	registerMessageHandler(clientChannel, Withdrawal.MESSAGE_ID, this::handleWithdrawalMessage);
-		registerMessageHandler(clientChannel, CheckBalance.MESSAGE_ID, this::handleCheckBalanceMessage);
+		//registerMessageHandler(clientChannel, CheckBalance.MESSAGE_ID, this::handleCheckBalanceMessage);
 	
     	registerChannelEventHandler(clientChannel, ClientUpEvent.EVENT_ID, this::uponClientConnectionUp);
         registerChannelEventHandler(clientChannel, ClientDownEvent.EVENT_ID, this::uponClientConnectionDown);
 
 	}
 
-	private void handleCheckBalanceMessage(ProtoMessage protoMessage, Host host, short i, int i1) {
-	}
+	//TODO: Implement
+	/*private void handleCheckBalanceMessage(CheckBalance cb, Host from, short sourceProto, int channelID) throws NoSuchAlgorithmException, SignatureException, InvalidKeyException, InvalidFormatException, NoSignaturePresentException {
+		try {
+			if (!cb.checkSignature(cb.getcID())) {
+				logger.warn("Received CheckBalance with invalid signature");
+				return;
 
-	private <V extends ProtoMessage> void handleCheckBalanceMessage(V v, Host host, short i, Throwable throwable, int i1) {
-	}
+		} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException | InvalidFormatException
+				| NoSignaturePresentException e) {
+			e.printStackTrace();
+		}
+
+	}*/
 
 	public void handleIssueOfferMessage(IssueOffer io, Host from, short sourceProto, int channelID ) {
 		// logger.info("Received IssueOffer (" + io.getRid() + " from " + from + "(" + io.getcID().toString() + ")");
