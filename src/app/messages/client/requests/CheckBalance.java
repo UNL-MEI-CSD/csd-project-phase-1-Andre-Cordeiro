@@ -1,12 +1,17 @@
 package app.messages.client.requests;
 
 import java.io.IOException;
+import java.security.KeyFactory;
+import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.UUID;
 
 import io.netty.buffer.ByteBuf;
 import pt.unl.fct.di.novasys.babel.generic.signed.SignedMessageSerializer;
 import pt.unl.fct.di.novasys.babel.generic.signed.SignedProtoMessage;
+import pt.unl.fct.di.novasys.network.ISerializer;
 
 public class CheckBalance extends SignedProtoMessage{
 
@@ -15,31 +20,11 @@ public class CheckBalance extends SignedProtoMessage{
     private PublicKey cID;
     private UUID rID;
 
-
-    public CheckBalance(PublicKey cID) {
-        super(MESSAGE_ID);
-        this.setRid(UUID.randomUUID());
-		this.setcID(cID);
+    public CheckBalance(UUID rID, PublicKey cID) {
+        super(CheckBalance.MESSAGE_ID);
+        this.rID = rID;
+        this.cID = cID;
     }
-
-
-    public static final SignedMessageSerializer<IssueOffer> serializer = new SignedMessageSerializer<IssueOffer>() {
-        @Override
-		public void serializeBody(IssueOffer io, ByteBuf out) throws IOException {
-			
-		}
-
-		@Override
-		public IssueOffer deserializeBody(ByteBuf in) throws IOException {
-			return null;
-            
-		}
-   };
-
-   @Override
-	public SignedMessageSerializer<IssueOffer> getSerializer() {
-		return IssueOffer.serializer;
-	}
 
     public UUID getRid() {
         return rID;
@@ -49,12 +34,46 @@ public class CheckBalance extends SignedProtoMessage{
         this.rID = rID;
     }
 
-    public PublicKey getcID() {
+    public PublicKey getCid() {
         return cID;
     }
 
-    public void setcID(PublicKey cID) {
+    public void setCid(PublicKey cID) {
         this.cID = cID;
+    }
+
+    public final static SignedMessageSerializer<CheckBalance> serializer = new SignedMessageSerializer<CheckBalance>() {
+        @Override
+        public void serializeBody(CheckBalance c, ByteBuf out) throws IOException {
+            out.writeLong(c.rID.getMostSignificantBits());
+            out.writeLong(c.rID.getLeastSignificantBits());
+            byte[] pk = c.cID.getEncoded();
+            out.writeShort(pk.length);
+            out.writeBytes(pk);
+        }
+
+        @Override
+        public CheckBalance deserializeBody(ByteBuf in) throws IOException {
+            long msb = in.readLong();
+            long lsb = in.readLong();
+            short l = in.readShort();
+            byte[] pk = new byte[l];
+            in.readBytes(pk);
+            PublicKey cID = null;
+            try {
+                cID = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(pk));
+            } catch (InvalidKeySpecException e) {
+            } catch (NoSuchAlgorithmException e) {
+            }
+
+            return new CheckBalance(new UUID(msb,lsb), cID);
+        }
+
+    };
+
+    @Override
+    public SignedMessageSerializer<CheckBalance> getSerializer() {
+        return CheckBalance.serializer;
     }
 
     @Override
