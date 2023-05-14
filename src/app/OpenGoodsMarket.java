@@ -174,7 +174,7 @@ public class OpenGoodsMarket extends GenericProtocol {
     	
     	registerMessageHandler(clientChannel, Deposit.MESSAGE_ID, this::handleDepositMessage);
     	registerMessageHandler(clientChannel, Withdrawal.MESSAGE_ID, this::handleWithdrawalMessage);
-		//registerMessageHandler(clientChannel, CheckBalance.MESSAGE_ID, this::handleCheckBalanceMessage);
+		registerMessageHandler(clientChannel, CheckBalance.MESSAGE_ID, this::handleCheckBalanceMessage);
 	
     	registerChannelEventHandler(clientChannel, ClientUpEvent.EVENT_ID, this::uponClientConnectionUp);
         registerChannelEventHandler(clientChannel, ClientDownEvent.EVENT_ID, this::uponClientConnectionDown);
@@ -182,22 +182,34 @@ public class OpenGoodsMarket extends GenericProtocol {
 	}
 
 	//TODO: Implement
-	/*private void handleCheckBalanceMessage(CheckBalance cb, Host from, short sourceProto, int channelID) throws NoSuchAlgorithmException, SignatureException, InvalidKeyException, InvalidFormatException, NoSignaturePresentException {
+	private void handleCheckBalanceMessage(CheckBalance cb, Host from, short sourceProto, int channelID) {
 		try {
 			if (!cb.checkSignature(cb.getcID())) {
 				logger.warn("Received CheckBalance with invalid signature");
+				state.changeOpers(cb.getRid(), OperationStatusReply.Status.REJECTED);
 				return;
-
-		} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException | InvalidFormatException
+			}
+		} catch(InvalidKeyException | NoSuchAlgorithmException | SignatureException | InvalidFormatException
 				| NoSignaturePresentException e) {
 			e.printStackTrace();
 		}
 
-	}*/
+		GenericClientReply ack = new GenericClientReply(cb.getRid());
+		sendMessage(clientChannel, ack, sourceProto, from, 0);
+
+		ByteBuf buf = Unpooled.buffer();
+		try {
+			cb.getSerializer().serializeBody(cb, buf);
+			ClientRequest cr = new ClientRequest(cb.getRid(), buf.array());
+			sendRequest(cr, BlockChainProtocol.PROTO_ID);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+	}
 
 	public void handleIssueOfferMessage(IssueOffer io, Host from, short sourceProto, int channelID ) {
 		// logger.info("Received IssueOffer (" + io.getRid() + " from " + from + "(" + io.getcID().toString() + ")");
-
 		// check if the signature is valid
 		try {
 			if (io.checkSignature(io.getcID())){
