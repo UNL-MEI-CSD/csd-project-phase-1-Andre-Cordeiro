@@ -49,7 +49,7 @@ import utils.StateApp.StateApp;
 public class OpenGoodsMarket extends GenericProtocol {
 
     private static final Logger logger = LogManager.getLogger(OpenGoodsMarket.class);
-     
+    
 	public static final String ADDRESS_KEY = "address";
 	public static final String PORT_KEY = "client_port";
 	public static final String SERVER_PORT_KEY = "server_port";
@@ -74,7 +74,7 @@ public class OpenGoodsMarket extends GenericProtocol {
             String address = getAddress(props.getProperty("interface"));
             if (address == null) return;
             props.put(ADDRESS_KEY, address);
-         }
+        }
         
         Babel babel = Babel.getInstance();
 
@@ -85,7 +85,7 @@ public class OpenGoodsMarket extends GenericProtocol {
         babel.registerProtocol(opm);
         babel.registerProtocol(bc);
         babel.registerProtocol(pbft);
-       
+        
         opm.init(props);
         bc.init(props);
         pbft.init(props);
