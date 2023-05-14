@@ -45,19 +45,19 @@ public class PrepareMessage extends SignedProtoMessage {
 		return PrepareMessage.serializer;
 	}
 
+	
+	public MessageBatchKey getBatchKey(){
+		return batchKey;
+	}
+	
+	
+	public String getCryptoName() {
+		return cryptoName;
+	}
 	@Override
 	public String toString() {
 		return "PrepareMessage{" +
 				"batchKey=" + batchKey +
 				'}';
-	}
-
-	public MessageBatchKey getBatchKey(){
-		return batchKey;
-	}
-	
-
-	public String getCryptoName() {
-		return cryptoName;
 	}
 }

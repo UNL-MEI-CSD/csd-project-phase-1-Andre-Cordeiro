@@ -13,7 +13,6 @@ public class ClientRequestUnhandledMessage extends SignedProtoMessage {
 	public final static short MESSAGE_ID = 202;
 	
 	private final UUID pendingRequestID;
-
 	private final String cryptoName;
 
 	public ClientRequestUnhandledMessage(UUID pendingRequestID, String cryptoName) {

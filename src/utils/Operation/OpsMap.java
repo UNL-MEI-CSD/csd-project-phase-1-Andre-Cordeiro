@@ -4,44 +4,50 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class OpsMap {
-        
-        private Map<Integer, byte[]> opsMap;
-        
-        public OpsMap() {
-                opsMap = new HashMap<>();
-        }
-        
-        public void addOp(int opsMapKeyHash, byte[] opsBlock) {
-                opsMap.put(opsMapKeyHash, opsBlock);
-        }
+    
+    private Map<Integer, byte[]> opsMap;
+    
+    public OpsMap() {
+        opsMap = new HashMap<>();
+    }
+    
+    public void addOp(int opsMapKeyHash, byte[] opsBlock) {
+        opsMap.put(opsMapKeyHash, opsBlock);
+    }
 
-        public byte[] getOp(int opsMapKeyHash) {
-                return opsMap.get(opsMapKeyHash);
-        }
+    public byte[] getOp(int opsMapKeyHash) {
+        return opsMap.get(opsMapKeyHash);
+    }
 
-        public boolean containsOp(int opsMapKeyHash) {
-                return opsMap.containsKey(opsMapKeyHash);
-        }
+    public boolean containsOp(int opsMapKeyHash) {
+        return opsMap.containsKey(opsMapKeyHash);
+    }
 
-        public void removeOp(int opsMapKeyHash) {
-                opsMap.remove(opsMapKeyHash);
-        }
+    public void removeOp(int opsMapKeyHash) {
+        opsMap.remove(opsMapKeyHash);
+    }
 
-        public void clear() {
-                opsMap.clear();
-        }
+    public void clear() {
+        opsMap.clear();
+    }
 
-        public void clearOp(int opsMapKeyHash) {
-                opsMap.remove(opsMapKeyHash);
-        }
+    public void clearOp(int opsMapKeyHash) {
+        opsMap.remove(opsMapKeyHash);
+    }
 
-        public int size() {
-                return opsMap.size();
-        }
+    public int size() {
+        return opsMap.size();
+    }
 
-        public Map<Integer, byte[]> getOpsMap() {
-                return opsMap;
-        }
+    public Map<Integer, byte[]> getOpsMap() {
+        return opsMap;
+    }
 
+    @Override
+    public String toString() {
+        return "OpsMap{" +
+                "opsMap=" + opsMap.toString() +
+                '}';
+    }
 
 }

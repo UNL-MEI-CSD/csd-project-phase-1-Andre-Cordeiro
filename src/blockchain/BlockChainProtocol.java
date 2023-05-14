@@ -101,12 +101,6 @@ public class BlockChainProtocol extends GenericProtocol {
 	public BlockChainProtocol(Properties props) throws NumberFormatException, UnknownHostException {
 		super(BlockChainProtocol.PROTO_NAME, BlockChainProtocol.PROTO_ID);
 
-		// Probably the following informations could be provided by a notification
-		// emitted by the PBFTProtocol
-		// (this should not be interpreted as the unique or canonical solution)
-		// self = new Host(InetAddress.getByName(props.getProperty(ADDRESS_KEY)),
-		// Integer.parseInt(props.getProperty(PORT_KEY)));
-
 		viewNumber = 0;
 		view = new View(viewNumber);
 		waitingForViewChange = false;
@@ -149,8 +143,6 @@ public class BlockChainProtocol extends GenericProtocol {
 		subscribeNotification(CommittedNotification.NOTIFICATION_ID, this::handleCommittedNotification);
 		subscribeNotification(InitialNotification.NOTIFICATION_ID, this::handleInitialNotification);
 
-		// setupPeriodicTimer(new CheckUnhandledRequestsPeriodicTimer(),
-		// checkRequestsPeriod, checkRequestsPeriod);
 	}
 
 
@@ -160,6 +152,7 @@ public class BlockChainProtocol extends GenericProtocol {
 	
 	private void forgeBlock() {
 
+		// Create the block
 		ByteBuf buffer = Unpooled.buffer();
 		for (int i = 0; i < 10; i++) {
 			buffer.writeShort(pendingOperations.get(0).length);
@@ -167,17 +160,20 @@ public class BlockChainProtocol extends GenericProtocol {
 			pendingOperations.remove(0);
 		}
 		byte[] operationsBytes = buffer.array();
-		// Create a new block
+		// generate the signature
 		byte[] signature;
 		try {
+
 			lastBlockNumber ++;
 			signature = SignaturesHelper.generateSignature(operationsBytes, key);
 			Block block = new Block(self, blockChain.getLastBlock().hashCode(), lastBlockNumber, signature,
 					operationsBytes);
+
 			// generate the propose request
 			byte[] blockBytes = serializeBlock(block);
 			byte[] blockSignature = SignaturesHelper.generateSignature(blockBytes, key);
 			ProposeRequest proposeRequest = new ProposeRequest(blockBytes, blockSignature);
+
 			// send the propose request to the PBFTProtocol
 			if (pendingRequests.isEmpty()){
 				pendingRequests.add(proposeRequest);
@@ -185,9 +181,12 @@ public class BlockChainProtocol extends GenericProtocol {
 			} else {
 				pendingRequests.add(proposeRequest);
 			}
+
 			logger.info("Propose to PBFTProtocol the block : " + block.getBlockNumber());
+
 		} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException e) {
 			e.printStackTrace();
+			logger.error("Error while generating the signature of the block");
 		}
 	}
 
@@ -196,7 +195,6 @@ public class BlockChainProtocol extends GenericProtocol {
 		// First check if the operation is valid
 		if (stateApp.isOperationValid(operation)) {
 			// then add it to the list of next operations
-			// logger.info("Adding operation to the block : " + operationToString(operation));
 			pendingOperations.add(operation);
 			if (pendingOperations.size() == 10) {
 				forgeBlock();
@@ -235,7 +233,9 @@ public class BlockChainProtocol extends GenericProtocol {
 		if (this.leader) {
 
 			addOperationToBlock(req.getOperation());
+
 		} else {
+
 			// Redirect the request to the leader
 			RedirectClientRequestMessage msg = new RedirectClientRequestMessage(req, cryptoName);
 			// sign the message
@@ -266,19 +266,21 @@ public class BlockChainProtocol extends GenericProtocol {
 		this.viewNumber = vc.getViewNumber();
 		this.view = new View(vc.getView(), vc.getViewNumber());
 		this.f = (this.view.getView().size() - 1) / 3;
-
 		this.leader = this.view.getLeader().equals(this.self);
+
 		if (this.leader)
-			logger.info("I am the leader: " + this.leader);
+			logger.info("I am the new leader: " + this.self);
+
 		// handle all unhandled blocks
 		UUID[] reqIds = unhandledRequestsMessages.keySet().toArray(new UUID[0]);
 		for (UUID reqId : reqIds) {
 			handleUnhandledRequest(reqId);
 		}
+
 		// reset unhandledMessages
 		unhandledRequestsMessages.clear();
-		logger.info("View change completed");
 		waitingForViewChange = false;
+
 	}
 
 	public void handleCommittedNotification(CommittedNotification cn, short from) {
@@ -358,9 +360,11 @@ public class BlockChainProtocol extends GenericProtocol {
 
 	private void handleRedirectClientRequestMessage(RedirectClientRequestMessage msg, Host from, short sourceProto,
 			int channel) {
+
 		if (!checkValidMessage(msg, from)) {
 			return;
 		}
+
 		if (this.leader) {
 
 			try {
@@ -386,6 +390,7 @@ public class BlockChainProtocol extends GenericProtocol {
 
 		this.unhandledRequestsMessages.put(msg.getPendingRequestID(), new LinkedList<Host>());
 		this.unhandledRequestsMessages.get(msg.getPendingRequestID()).add(self);
+
 		// remove the timer for this request
 		if (pendingRequestsTimers.containsKey(msg.getPendingRequestID())) {
 			cancelTimer(pendingRequestsTimers.get(msg.getPendingRequestID()));
@@ -393,9 +398,11 @@ public class BlockChainProtocol extends GenericProtocol {
 			LeaderSuspectTimer timer = new LeaderSuspectTimer(msg.getPendingRequestID(), this.viewNumber);
 			this.pendingRequestsTimers.put(msg.getPendingRequestID(), setupTimer(timer, leaderTimeout));
 		}
+
 		// build the message
 		StartClientRequestSuspectMessage startMsg = new StartClientRequestSuspectMessage(msg.getPendingRequestID(),
 				cryptoName);
+
 		// sign the message
 		try {
 			startMsg.signMessage(key);
@@ -403,6 +410,7 @@ public class BlockChainProtocol extends GenericProtocol {
 			e.printStackTrace();
 			System.exit(1); // Catastrophic failure!!!
 		}
+
 		// send it to everyone
 		view.getView().forEach(host -> {
 			if (!host.equals(this.self)) {
@@ -421,19 +429,23 @@ public class BlockChainProtocol extends GenericProtocol {
 		}
 
 		if (this.unhandledRequestsMessages.containsKey(msg.getPendingRequestID())) {
+
 			this.unhandledRequestsMessages.get(msg.getPendingRequestID()).add(from);
-			// logger.info("Received " +
-			// this.unhandledRequestsMessages.get(msg.getPendingRequestID()).size() + "
-			// StartClientRequestSuspectMessage with id: " + msg.getPendingRequestID());
+
 			if (this.unhandledRequestsMessages.get(msg.getPendingRequestID()).size() >= 2 * this.f + 1) {
+
 				// start a leader suspect timer
 				LeaderSuspectTimer timer = new LeaderSuspectTimer(msg.getPendingRequestID(), this.viewNumber);
+
 				// add the timer to the list
 				this.pendingRequestsTimers.put(msg.getPendingRequestID(), setupTimer(timer, leaderTimeout));
+
 			}
 		} else {
+
 			this.unhandledRequestsMessages.put(msg.getPendingRequestID(), new LinkedList<Host>());
 			this.unhandledRequestsMessages.get(msg.getPendingRequestID()).add(from);
+
 		}
 	}
 
@@ -469,6 +481,7 @@ public class BlockChainProtocol extends GenericProtocol {
 		}
 
 		if (!this.unhandledRequestsMessages.containsKey(t.getPendingRequestID())) {
+
 			// send it to everyone
 			view.getView().forEach(host -> {
 				if (!host.equals(self)) {
@@ -477,6 +490,7 @@ public class BlockChainProtocol extends GenericProtocol {
 					handleClientRequestUnhandledMessage(msg, self, (short) 0, 0);
 				}
 			});
+
 		} else {
 			// cancel the timer
 			cancelTimer(timerId);
@@ -495,6 +509,7 @@ public class BlockChainProtocol extends GenericProtocol {
 		if (!stateApp.isOperationUnkown(t.getRequestID())) {
 			return;
 		}
+
 		// Send a StartViewChange message to his PBFT protocol
 		logger.info("Leader suspect timer expired for request " + t.getRequestID());
 		this.unhandledRequestsMessages.remove(t.getRequestID());
@@ -520,34 +535,50 @@ public class BlockChainProtocol extends GenericProtocol {
 	/* ----------------------------------------------- ------------- ------------------------------------------ */
 
 	private boolean checkValidMessage(Object msgObj, Host from) {
+
 		boolean check = false;
+
 		if (msgObj instanceof ClientRequestUnhandledMessage) {
+
 			ClientRequestUnhandledMessage msg = (ClientRequestUnhandledMessage) msgObj;
 			try {
+
 				check = msg.checkSignature(truststore.getCertificate(msg.getCryptoName()).getPublicKey());
+
 			} catch (InvalidFormatException | NoSignaturePresentException | NoSuchAlgorithmException
 					| InvalidKeyException | SignatureException | KeyStoreException e) {
 				logger.error("Error checking signature in " + msg.getClass() + " from " + from + ": " + e.getMessage());
 				return false;
 			}
+
 		} else if (msgObj instanceof RedirectClientRequestMessage) {
+
 			RedirectClientRequestMessage msg = (RedirectClientRequestMessage) msgObj;
+
 			try {
+
 				check = msg.checkSignature(truststore.getCertificate(msg.getCryptoName()).getPublicKey());
+
 			} catch (InvalidFormatException | NoSignaturePresentException | NoSuchAlgorithmException
 					| InvalidKeyException | SignatureException | KeyStoreException e) {
 				logger.error("Error checking signature in " + msg.getClass() + " from " + from + ": " + e.getMessage());
 				return false;
 			}
+
 		} else if (msgObj instanceof StartClientRequestSuspectMessage) {
+
 			StartClientRequestSuspectMessage msg = (StartClientRequestSuspectMessage) msgObj;
+
 			try {
+
 				check = msg.checkSignature(truststore.getCertificate(msg.getCryptoName()).getPublicKey());
+
 			} catch (InvalidFormatException | NoSignaturePresentException | NoSuchAlgorithmException
 					| InvalidKeyException | SignatureException | KeyStoreException e) {
 				logger.error("Error checking signature in " + msg.getClass() + " from " + from + ": " + e.getMessage());
 				return false;
 			}
+
 		} else {
 			logger.error("Unknown message type: " + msgObj.getClass());
 			throw new IllegalArgumentException("Message is not valid");
@@ -558,6 +589,7 @@ public class BlockChainProtocol extends GenericProtocol {
 	/* ----------------------------------------------- ------------- ------------------------------------------ */
     /* ----------------------------------------------- APP INTERFACE ------------------------------------------ */
     /* ----------------------------------------------- ------------- ------------------------------------------ */
+
     public void submitClientOperation(byte[] b) {
     	sendRequest(new ClientRequest(b), BlockChainProtocol.PROTO_ID);
     }
@@ -567,20 +599,27 @@ public class BlockChainProtocol extends GenericProtocol {
 	/* ----------------------------------------------- ------------- ------------------------------------------ */
 
 	private void handleUnhandledRequest(UUID reqId) {
-		if (this.pendingRequestsTimers.get(reqId) != null)
+
+		if (this.pendingRequestsTimers.get(reqId) != null) {
 			cancelTimer(this.pendingRequestsTimers.get(reqId));
+		}
+
 		this.pendingRequestsTimers.remove(reqId);
 		CheckUnhandledRequestsPeriodicTimer timer = new CheckUnhandledRequestsPeriodicTimer(reqId);
 		this.pendingRequestsTimers.put(reqId, setupTimer(timer, checkRequestsPeriod));
+
 	}
 
 	public byte[] serializeBlock(Block block) {
+
 		ByteBuf bufValidator = Unpooled.buffer();
 		try {
 			Host.serializer.serialize(block.getValidater(),bufValidator);
 		} catch (IOException e) {
 			e.printStackTrace();
+			// TODO: handle exception
 		}
+
 		ByteBuf buf = Unpooled.buffer();
 		buf.writeShort(bufValidator.readableBytes());
 		buf.writeBytes(bufValidator);
@@ -594,15 +633,18 @@ public class BlockChainProtocol extends GenericProtocol {
 	}
 
 	private Block deserializeBlock(byte[] block) {
+
 		// convert to bytebuf
 		ByteBuf buf = Unpooled.copiedBuffer(block);
+
 		// read the block
 		int validaterLength = buf.readShort();
 		ByteBuf validater = buf.readBytes(validaterLength);
+
 		Host validaterHost;
 		try {
+
 			validaterHost = Host.serializer.deserialize(validater);
-			logger.info("Validater: " + validaterHost);
 			int hashPreviousBlock = buf.readInt();
 			int blockNumber = buf.readInt();
 			int signatureLength = buf.readInt();
@@ -612,6 +654,7 @@ public class BlockChainProtocol extends GenericProtocol {
 			byte[] operations = new byte[operationsLength];
 			buf.readBytes(operations);
 			return new Block(validaterHost, hashPreviousBlock, blockNumber, signature, operations);
+
 		} catch (IOException e) {
 			e.printStackTrace();
 			logger.error("Error deserializing block");
@@ -620,46 +663,68 @@ public class BlockChainProtocol extends GenericProtocol {
 	}
 
 	private void cancelAllTimersForRequest(byte[] operation) {
+
 		ByteBuf buf = Unpooled.copiedBuffer(operation);
+
 		try {
+
 			Deposit deposit = new Deposit();
 			deposit = deposit.getSerializer().deserializeBody(buf);
+
 			if (this.pendingRequestsTimers.get(deposit.getRid()) != null)
 				cancelTimer(this.pendingRequestsTimers.get(deposit.getRid()));
+
 			if (this.unhandledRequestsMessages.get(deposit.getRid()) != null)
 				this.unhandledRequestsMessages.remove(deposit.getRid());
+
 		} catch (Exception e) {/*do nothing*/}
 		try {
+
 			Withdrawal withdrawal = new Withdrawal();
 			withdrawal = withdrawal.getSerializer().deserializeBody(buf);
+
 			if (this.pendingRequestsTimers.get(withdrawal.getRid()) != null)
 				cancelTimer(this.pendingRequestsTimers.get(withdrawal.getRid()));
+
 			if (this.unhandledRequestsMessages.get(withdrawal.getRid()) != null)
 				this.unhandledRequestsMessages.remove(withdrawal.getRid());
+
 		} catch (Exception e) {/*do nothing*/}
 		try {
+
 			IssueOffer offer = new IssueOffer();
 			offer = offer.getSerializer().deserializeBody(buf);
+
 			if (this.pendingRequestsTimers.get(offer.getRid()) != null)
 				cancelTimer(this.pendingRequestsTimers.get(offer.getRid()));
+
 			if (this.unhandledRequestsMessages.get(offer.getRid()) != null)
 				this.unhandledRequestsMessages.remove(offer.getRid());
+
 		} catch (Exception e) {/*do nothing*/}
 		try {
+
 			IssueWant want = new IssueWant();
 			want = want.getSerializer().deserializeBody(buf);
+
 			if (this.pendingRequestsTimers.get(want.getRid()) != null)
 				cancelTimer(this.pendingRequestsTimers.get(want.getRid()));
+
 			if (this.unhandledRequestsMessages.get(want.getRid()) != null)
 				this.unhandledRequestsMessages.remove(want.getRid());
+
 		} catch (Exception e) {/*do nothing*/}
 		try {
+
 			Cancel cancel = new Cancel();
 			cancel = cancel.getSerializer().deserializeBody(buf);
+
 			if (this.pendingRequestsTimers.get(cancel.getrID()) != null)
 				cancelTimer(this.pendingRequestsTimers.get(cancel.getrID()));
+
 			if (this.unhandledRequestsMessages.get(cancel.getrID()) != null)
 				this.unhandledRequestsMessages.remove(cancel.getrID());
+
 		} catch (Exception e) {/*do nothing*/}
 	}
 
@@ -669,31 +734,43 @@ public class BlockChainProtocol extends GenericProtocol {
 
 
 	private String operationToString(byte[] op){
+
 		ByteBuf buf = Unpooled.copiedBuffer(op);
+
 		try {
+
 			Deposit deposit = new Deposit();
 			deposit = deposit.getSerializer().deserializeBody(buf);
 			return deposit.toString();
+
 		} catch (Exception e) {/*do nothing*/}
 		try {
+
 			Withdrawal withdrawal = new Withdrawal();
 			withdrawal = withdrawal.getSerializer().deserializeBody(buf);
 			return withdrawal.toString();
+
 		} catch (Exception e) {/*do nothing*/}
 		try {
+
 			IssueOffer offer = new IssueOffer();
 			offer = offer.getSerializer().deserializeBody(buf);
 			return offer.toString();
+
 		} catch (Exception e) {/*do nothing*/}
 		try {
+
 			IssueWant want = new IssueWant();
 			want = want.getSerializer().deserializeBody(buf);
 			return want.toString();
+
 		} catch (Exception e) {/*do nothing*/}
 		try {
+
 			Cancel cancel = new Cancel();
 			cancel = cancel.getSerializer().deserializeBody(buf);
 			return cancel.toString();
+			
 		} catch (Exception e) {/*do nothing*/}
 		return "Unknown operation";
 	}

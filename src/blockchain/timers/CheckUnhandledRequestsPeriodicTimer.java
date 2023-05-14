@@ -24,4 +24,11 @@ public class CheckUnhandledRequestsPeriodicTimer extends ProtoTimer {
 	public UUID getPendingRequestID() {
 		return pendingRequestID;
 	}
+
+	@Override
+	public String toString() {
+		return "CheckUnhandledRequestsPeriodicTimer{" +
+				"pendingRequestID=" + pendingRequestID +
+				'}';
+	}
 }

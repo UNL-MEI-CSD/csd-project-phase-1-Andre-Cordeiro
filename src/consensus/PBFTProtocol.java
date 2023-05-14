@@ -67,10 +67,6 @@ public class PBFTProtocol extends GenericProtocol {
 	// Timers
 	private final int RECONNECT_TIME;
 
-	// private long noOpTimer;
-	// private long leaderTimer;
-    // private long lastLeaderOp;
-
 	// Crypto
 	private String cryptoName;
 	private KeyStore truststore;
@@ -85,7 +81,6 @@ public class PBFTProtocol extends GenericProtocol {
 	private Host self;
 	private View view;
 	private int failureNumber;
-	// private boolean isInViewChange;
 
 	//State
 	private OpsMap opsMap;
@@ -116,6 +111,7 @@ public class PBFTProtocol extends GenericProtocol {
 		highestSeqN = currentSeqN;
 
 		mb = new MessageBatch();
+		opsMap = new OpsMap();
 		
 	}
 
@@ -153,20 +149,14 @@ public class PBFTProtocol extends GenericProtocol {
 		registerMessageHandler(peerChannel, PrePrepareMessage.MESSAGE_ID, this::uponPrePrepareMessage, this::uponMessageFailed);
         registerMessageHandler(peerChannel, PrepareMessage.MESSAGE_ID, this::uponPrepareMessage, this::uponMessageFailed);
 		registerMessageHandler(peerChannel, CommitMessage.MESSAGE_ID, this::uponCommitMessage, this::uponMessageFailed);
-		// registerMessageHandler(peerChannel, ViewChangeMessage.MESSAGE_ID, this::uponViewChangeMessage, this::uponMessageFailed);
-		// registerMessageHandler(peerChannel, NewViewMessage.MESSAGE_ID, this::uponNewViewMessage, this::uponMessageFailed);
-
+		
 		// Message Serializers
 		registerMessageSerializer(peerChannel, PrePrepareMessage.MESSAGE_ID, PrePrepareMessage.serializer);
 		registerMessageSerializer(peerChannel, PrepareMessage.MESSAGE_ID, PrepareMessage.serializer);
 		registerMessageSerializer(peerChannel, CommitMessage.MESSAGE_ID, CommitMessage.serializer);
-		// registerMessageSerializer(peerChannel, ViewChangeMessage.MESSAGE_ID, ViewChangeMessage.serializer);
-		// registerMessageSerializer(peerChannel, NewViewMessage.MESSAGE_ID, NewViewMessage.serializer);
-
+		
 		// Timer Handlers
-		// registerTimerHandler(LeaderTimer.TIMER_ID, this::onLeaderTimer);
-        // registerTimerHandler(NoOpTimer.TIMER_ID, this::onNoOpTimer);
-        // registerTimerHandler(ReconnectTimer.TIMER_ID, this::onReconnectTimer);
+        registerTimerHandler(ReconnectTimer.TIMER_ID, this::onReconnectTimer);
 
 
 		logger.info("Standing by to extablish connections (10s)");
@@ -174,7 +164,6 @@ public class PBFTProtocol extends GenericProtocol {
 		try { Thread.sleep(10 * 1000); } catch (InterruptedException e) { }
 		
 		view.getView().forEach(this::openConnection);
-		// leaderTimer = setupPeriodicTimer(LeaderTimer.instance, LEADER_TIMEOUT, LEADER_TIMEOUT / 3);
 
 		triggerNotification(new InitialNotification(self, peerChannel));
 		
@@ -184,46 +173,9 @@ public class PBFTProtocol extends GenericProtocol {
 
 	/* --------------------------------------- Timer Handlers ----------------------------------- */
 
-	// private void onLeaderTimer(LeaderTimer timer, long timerId) {
-    //     if (!view.isLeader(self) && (System.currentTimeMillis() - lastLeaderOp > LEADER_TIMEOUT)){
-    //         logger.error("Leader timeout expired. Triggering view change.");
-	// 		//startViewChange();
-	// 	}
-    // }
-
-	// private void onNoOpTimer(NoOpTimer timer, long timerId) {
-	// 	if (currentSeqN.getNode().equals(self)) {
-	// 		logger.warn("Sending NOOP");
-	// 		noOpTimer = setupPeriodicTimer(NoOpTimer.instance, NOOP_SEND_INTERVAL, NOOP_SEND_INTERVAL);
-	// 	}
-	// }
-
-	// private void onReconnectTimer(ReconnectTimer timer, long timerId) {
-	// 	openConnection(timer.getHost());
-	// }
-
-
-	// --------------------------------------- View Change Handlers -----------------------------------
-	
-	// private void startViewChange() {
-	// 	logger.info("Starting view change");
-	// 	isInViewChange = true;
-	// 	cancelTimer(leaderTimer);
-	// 	view.incrementViewNumber();
-		
-	// 	ViewChangeMessage vcm = new ViewChangeMessage(view.getViewNumber(), currentSeqN.getCounter(), self.getPort(), cryptoName);
-	// 	try {
-	// 		vcm.signMessage(privKey);
-	// 	} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException | InvalidSerializerException e) {
-	// 		e.printStackTrace();
-	// 	}
-	// 	view.getView().forEach(h -> {
-	// 		if (!h.equals(self)) {
-	// 			sendMessage(vcm, h);
-	// 			logger.info("Sending view change message to " + h);
-	// 		}
-	// 	});
-	// }
+	private void onReconnectTimer(ReconnectTimer timer, long timerId) {
+		openConnection(timer.getHost());
+	}
 
 	// --------------------------------------- Connection Manager Handlers -----------------------------
 	
@@ -259,11 +211,8 @@ public class PBFTProtocol extends GenericProtocol {
 	/* --------------------------------------- Propose Request Handler ----------------------------------- */
 	
     private void uponProposeRequest(ProposeRequest req, int channel) {
-		// logger.info("Received propose request: " + req);
-		// if (isInViewChange) {
-		// 	logger.warn("View change in progress. Request rejected.");
-		// 	return;
-		// }
+
+		logger.info("Received propose request: " + req);
 
 		//check if the signature is valid
 		try {
@@ -374,11 +323,6 @@ public class PBFTProtocol extends GenericProtocol {
 	// ---------------------- PrePrepare Message Handlers -----------------------------
 
 	private void uponPrePrepareMessage(PrePrepareMessage msg, Host from, short sourceProto, int channel){
-
-		// if (isInViewChange) {
-		// 	logger.warn("View change in progress. Message rejected.");
-		// 	return;
-		// }
 		
 		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN() < highestSeqN){
 			if (msg.getBatchKey().getViewNumber() != view.getViewNumber())
@@ -396,7 +340,11 @@ public class PBFTProtocol extends GenericProtocol {
 				mb.addMessage(msg.getBatchKey().hashCode());
 			}
 			catch (RuntimeException e){
-				// logger.warn("Received a duplicate pre-prepare message: " + msg +" "+ mb.size()  + " " + e.getMessage() + " from " + from);
+				logger.warn("Received a duplicate pre-prepare message: " + msg +" "+ mb.size()  + " " + e.getMessage() + " from " + from);
+				
+				// TODO: handle exception 
+
+				// debug code
 				// logger.warn("Keys in the mb: " + msg.getBatchKey().hashCode());
 				// for (int key : mb.getKeys()){
 				// 	logger.warn("Key: " + key);	
@@ -420,18 +368,12 @@ public class PBFTProtocol extends GenericProtocol {
 					mb.addPrepareMessage(msg.getBatchKey().hashCode(), self);
 				}
 			});
-			// lastLeaderOp = System.currentTimeMillis();
 		}
 	}
 
 	// --------------------------- Prepare Message ---------------------------
 
 	private void uponPrepareMessage(PrepareMessage msg, Host from, short sourceProto, int channel){
-
-		// if (isInViewChange) {
-		// 	logger.warn("View change in progress. Message rejected.");
-		// 	return;
-		// }
 
 		logger.info("Received a prepare message: " + msg + " from " + from);
 
@@ -476,11 +418,6 @@ public class PBFTProtocol extends GenericProtocol {
 
 	private void uponCommitMessage(CommitMessage msg, Host from, short sourceProto, int channel){
 
-		// if (isInViewChange) {
-		// 	logger.warn("View change in progress. Message rejected.");
-		// 	return;
-		// }
-
 		logger.info("Received a commit message: " + msg + " from " + from);
 
 		if (msg.getBatchKey().getViewNumber() != view.getViewNumber() || msg.getBatchKey().getSeqN() < highestSeqN){
@@ -503,8 +440,10 @@ public class PBFTProtocol extends GenericProtocol {
 				commitMessagesReceived = mb.addCommitMessage(hash, from);
 			}
 			if (commitMessagesReceived == failureNumber + 1) {
+
 				newHighestSeqN(msg.getBatchKey().getSeqN());
 				byte[] block = opsMap.getOp(msg.getBatchKey().hashCode());
+
 				try {
 					UUID.fromString(new String(block));
 					// send a view change notification to the blockchain
@@ -513,19 +452,15 @@ public class PBFTProtocol extends GenericProtocol {
 					triggerNotification(viewChange);
 				}
 				catch (IllegalArgumentException e){
+
 					try {
 						CommittedNotification commitNotificationMsg = new CommittedNotification(block, SignaturesHelper.generateSignature(block, privKey));
 						triggerNotification(commitNotificationMsg);
-						// mb.clearMessage(msg.getBatchKey().hashCode());
-						// opsMap.clearOp(msg.getBatchKey().getOpsHash());
-						// if (view.isLeader(self)) {
-						// 	cancelTimer(noOpTimer);
-						// 	noOpTimer = setupTimer(NoOpTimer.instance, NOOP_SEND_INTERVAL);
-						// };
 					} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException f) {
 						logger.error("Error signing committed notification message: " + e.getMessage());
 						e.printStackTrace();
 					}
+
 				}
 				// discard the message and the op
 				mb.removeMessage(hash);
@@ -534,67 +469,11 @@ public class PBFTProtocol extends GenericProtocol {
 		}
 	}
 
-	// ---------------------- View Change Message ----------------------------
-
-	// private void uponViewChangeMessage(ViewChangeMessage msg, Host from, short sourceProto, int channel){
-	// 	logger.info("Received a view change message from " + from + " for view " + msg.getViewNumber());
-	// 	if (checkValidMessage(msg,from)){
-	// 		if (msg.getViewNumber() >= view.getViewNumber()) {
-	// 			if (view.checkIfLeader(self, msg.getViewNumber())){
-	// 				if (!viewChangeMessagesReceived.contains(msg)) {
-	// 					if (viewChangeMessagesReceived.isEmpty()) {
-	// 						viewChangeMessagesReceived.add(msg);
-	// 					}
-	// 					else {
-	// 						if (viewChangeMessagesReceived.get(0).getViewNumber() == msg.getViewNumber()) {
-	// 							viewChangeMessagesReceived.add(msg);
-	// 						}
-	// 						else {
-	// 							if (viewChangeMessagesReceived.get(0).getViewNumber() < msg.getViewNumber()) {
-	// 								viewChangeMessagesReceived.clear();
-	// 								viewChangeMessagesReceived.add(msg);
-	// 							}
-	// 						}
-	// 					}
-	// 				}
-	// 				else {
-	// 					logger.warn("Received a duplicated view change message: " + msg);
-	// 					return;
-	// 				}
-	// 				logger.info("Received " + viewChangeMessagesReceived.size() + " view change messages");
-	// 				if (viewChangeMessagesReceived.size() == 2 * failureNumber) {
-	// 					NewViewMessage newViewMsg = new NewViewMessage(msg.getViewNumber(), viewChangeMessagesReceived, new LinkedList<>(), cryptoName);
-	// 					try {
-	// 						newViewMsg.signMessage(privKey);
-	// 					} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException
-	// 							| InvalidSerializerException e) {
-	// 						e.printStackTrace();
-	// 					}
-	// 					view.getView().forEach(node -> sendMessage(newViewMsg, node));
-	// 				}	
-	// 			}				
-	// 		}
-	// 	}
-	// }
-
-	// ---------------------- New View Message ----------------------------
-
-	// private void uponNewViewMessage(NewViewMessage msg, Host from, short sourceProto, int channel){
-	// 	if (checkValidMessage(msg,from)){
-	// 		logger.info("Received a new view message from " + from + " for view " + msg.getViewNumber());
-	// 		view.setViewNumber(msg.getViewNumber());
-	// 		isInViewChange = false;
-	// 		triggerNotification(new ViewChange(view));
-	// 	}
-	// }
-
-
 	// ------------------------- Failure handling ------------------------- //
 
 	private void uponMessageFailed(ProtoMessage msg, Host from, short sourceProto, int channel){
 		logger.warn("Failed to deliver message " + msg + " from " + from);
 	}
-
 
 	// ------------------------- Validation functions ------------------------- //
 
@@ -632,27 +511,6 @@ public class PBFTProtocol extends GenericProtocol {
 				return false;
 			}
 		} 
-		// else if (msgObj instanceof ViewChangeMessage){
-		// 	ViewChangeMessage msg = (ViewChangeMessage) msgObj;
-		// 	try{
-		// 		check = msg.checkSignature(truststore.getCertificate(msg.getCryptoName()).getPublicKey());
-		// 	}
-		// 	catch(InvalidFormatException | NoSignaturePresentException | NoSuchAlgorithmException | InvalidKeyException |
-		// 	SignatureException | KeyStoreException e){
-		// 		logger.error("Error checking signature in " + msg.getClass() + " from " + from + ": " + e.getMessage());
-		// 		return false;
-		// 	}
-		// } else if (msgObj instanceof NewViewMessage){
-		// 	NewViewMessage msg = (NewViewMessage) msgObj;
-		// 	try{
-		// 		check = msg.checkSignature(truststore.getCertificate(msg.getCryptoName()).getPublicKey());
-		// 	}
-		// 	catch(InvalidFormatException | NoSignaturePresentException | NoSuchAlgorithmException | InvalidKeyException |
-		// 	SignatureException | KeyStoreException e){
-		// 		logger.error("Error checking signature in " + msg.getClass() + " from " + from + ": " + e.getMessage());
-		// 		return false;
-		// 	}
-		// } 
 		else {
 			logger.error("Unknown message type: " + msgObj.getClass());
 			throw new IllegalArgumentException("Message is not valid");

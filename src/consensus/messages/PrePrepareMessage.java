@@ -53,23 +53,23 @@ public class PrePrepareMessage extends SignedProtoMessage {
 		return PrePrepareMessage.serializer;
 	}
 
+	
+	public MessageBatchKey getBatchKey() {
+		return batchKey;
+	}
+	
+	public String getCryptoName(){
+		return cryptoName;
+	}
+	
+	public byte[] getBlock() {
+		return block;
+	}
+	
 	@Override
 	public String toString() {
 		return "PrePrepareMessage{" +
 				"batchKey=" + batchKey +
 				'}';
 	}
-
-	public MessageBatchKey getBatchKey() {
-		return batchKey;
-	}
-
-	public String getCryptoName(){
-		return cryptoName;
-	}
-
-	public byte[] getBlock() {
-		return block;
-	}
-
 }

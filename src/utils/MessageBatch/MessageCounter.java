@@ -27,7 +27,7 @@ public class MessageCounter {
     @Override
     public String toString() {
         return "MessageCounter{" +
-                ", hosts=" + hosts +
+                ", hosts=" + hosts.toString() +
                 '}';
     }
 }

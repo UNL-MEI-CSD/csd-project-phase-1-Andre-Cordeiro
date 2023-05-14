@@ -108,7 +108,13 @@ public class WantOp {
 
     @Override
     public String toString() {
-        return "Want{" + "rid=" + rid + ", cID=" + cID + ", resourceType=" + resourceType + ", quantity=" + quantity + ", pricePerUnit=" + pricePerUnit + '}';
+        return "Want{" + 
+            "rid=" + rid + 
+            ", cID=" + cID + 
+            ", resourceType=" + resourceType + 
+            ", quantity=" + quantity + 
+            ", pricePerUnit=" + pricePerUnit + 
+            '}';
     }
 
 

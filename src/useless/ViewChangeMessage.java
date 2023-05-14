@@ -12,21 +12,20 @@ public class ViewChangeMessage extends SignedProtoMessage{
     public final static short MESSAGE_ID = 109;
 
     private final int viewNumber;
-
     private final int lastSequenceNumber;
-
     private final int replicaID;
-
     public final String cryptoName;
 
     //Add checkpoint Message and Prepared Message Batch.
 
     public ViewChangeMessage(int viewNumber, int lastSequenceNumber , int replicaID, String cryptoName) {
+
         super(ViewChangeMessage.MESSAGE_ID);
         this.viewNumber = viewNumber;
         this.replicaID = replicaID;
         this.lastSequenceNumber = lastSequenceNumber;
         this.cryptoName = cryptoName;
+
     }
 
     public static final SignedMessageSerializer<ViewChangeMessage> serializer = new SignedMessageSerializer<ViewChangeMessage>() {
@@ -76,7 +75,13 @@ public class ViewChangeMessage extends SignedProtoMessage{
 
     @Override
     public String toString() {
-        return "viewChangeMessage []";
+        return "viewChangeMessage ["+
+                "viewNumber=" + viewNumber +
+                ", lastSequenceNumber=" + lastSequenceNumber +
+                ", replicaID=" + replicaID +
+                ", cryptoName=" + cryptoName +
+                ']';
+
     }
 
 }

@@ -5,7 +5,6 @@ import pt.unl.fct.di.novasys.network.data.Host;
 //The block : basic unit of the blockchain
 public class Block {
 
-
     //The block's data
     private Host validater;
 
@@ -50,7 +49,16 @@ public class Block {
         return validater.hashCode() + hashPreviousBlock + blockNumber + signature.hashCode();
     }
 
-
+    @Override
+    public String toString() {
+        return "Block{" +
+                "validater=" + validater +
+                ", hashPreviousBlock=" + hashPreviousBlock +
+                ", blockNumber=" + blockNumber +
+                ", signature=" + signature +
+                ", operations=" + operations +
+                '}';
+    }
     
 
 }

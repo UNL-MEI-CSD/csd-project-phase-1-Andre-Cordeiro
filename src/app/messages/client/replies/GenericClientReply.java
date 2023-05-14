@@ -42,4 +42,11 @@ public class GenericClientReply extends ProtoMessage {
 		}
 	};
 
+	@Override
+	public String toString() {
+		return "GenericClientReply{" +
+				"rID=" + rID +
+				'}';
+	}
+
 }

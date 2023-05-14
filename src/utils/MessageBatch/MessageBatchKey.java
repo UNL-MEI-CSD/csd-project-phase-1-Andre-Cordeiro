@@ -25,12 +25,13 @@ public class MessageBatchKey {
     }
 
     public int hashCode() {
-        //create a unique hashcode for each batch
+
         int hash = 1;
         hash = hash * 17 + opsMapHash;
         hash = hash * 31 + seqN;
         hash = hash * 13 + viewNumber;
         return hash;
+        
     }
 
     @Override

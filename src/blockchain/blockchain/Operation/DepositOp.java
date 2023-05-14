@@ -9,7 +9,8 @@ public class DepositOp {
     
     private UUID rid;
 	private PublicKey clientID;
-	private float amount;
+	
+    private float amount;
 
 	public DepositOp(Deposit deposit) {
 		this.rid = deposit.getRid();
@@ -35,6 +36,10 @@ public class DepositOp {
 
     @Override
     public String toString() {
-        return "Deposit{" + "rid=" + rid + ", clientID=" + clientID + ", amount=" + amount + '}';
+        return "Deposit{" + 
+        "rid=" + rid + 
+        ", clientID=" + clientID + 
+        ", amount=" + amount + 
+        '}';
     }
 }

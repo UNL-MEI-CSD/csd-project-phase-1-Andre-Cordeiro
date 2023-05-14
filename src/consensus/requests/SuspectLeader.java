@@ -14,15 +14,16 @@ public class SuspectLeader extends ProtoRequest {
 	//and justifies this suspicion (while will lead to a view change)
 	//Note: Could potentially be a Set of pending requests identifiers)
 	private final UUID pendingRequestID;
-	
 	private final byte[] signature;
 	private final Timestamp timestamp;
 	
 	public SuspectLeader(UUID pendingRequestID, byte[] signature) {
+
 		super(SuspectLeader.REQUEST_ID);
 		this.pendingRequestID = pendingRequestID;
 		this.signature = signature;
 		this.timestamp = new Timestamp(new Date().getTime());
+
 	}
 
 	public UUID getPendingRequestID() {
@@ -39,6 +40,15 @@ public class SuspectLeader extends ProtoRequest {
 
 	public int hashCode() {
 		return pendingRequestID.hashCode();
+	}
+
+	@Override
+	public String toString() {
+		return "SuspectLeader{" +
+				"pendingRequestID=" + pendingRequestID +
+				", signature=" + signature +
+				", timestamp=" + timestamp +
+				'}';
 	}
 
 }

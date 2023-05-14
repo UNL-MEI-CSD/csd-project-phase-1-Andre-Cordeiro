@@ -107,7 +107,13 @@ public class OfferOp {
 
     @Override
     public String toString() {
-        return "Offer{" + "rid=" + rid + ", cID=" + cID + ", resourceType=" + resourceType + ", quantity=" + quantity + ", pricePerUnit=" + pricePerUnit + '}';
+        return "Offer{" + 
+        "rid=" + rid + 
+        ", cID=" + cID + 
+        ", resourceType=" + resourceType + 
+        ", quantity=" + quantity + 
+        ", pricePerUnit=" + pricePerUnit + 
+        '}';
     }
 
     

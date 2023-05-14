@@ -13,7 +13,6 @@ public class CommitMessage extends SignedProtoMessage{
     public final static short MESSAGE_ID = 103;	
 
 	public final MessageBatchKey batchKey;
-
 	public final String cryptoName;
 
     public CommitMessage(MessageBatchKey batchKey, String cryptoName){

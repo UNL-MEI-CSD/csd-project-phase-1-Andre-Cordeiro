@@ -52,6 +52,14 @@ public class ClientRequest extends ProtoRequest {
 		bb.writeBytes(this.operation);
 		return ByteBufUtil.getBytes(bb);
 	}
+
+	@Override
+	public String toString() {
+		return "ClientRequest{" +
+				"requestId=" + requestId +
+				", operation=" + operation +
+				'}';
+	}
 	
 	
 }

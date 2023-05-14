@@ -76,7 +76,6 @@ public class RandomGenerationOperationApp {
 			        	r.nextBytes(block);
 			        	
 			        	bc.submitClientOperation(block);
-			        	      
 						Thread.sleep(5 * 1000);
 					} catch (InterruptedException e) {
 						//nothing to be done here

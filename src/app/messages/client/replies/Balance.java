@@ -16,4 +16,11 @@ public class Balance extends ProtoMessage {
     public float getBalance() {
         return balance;
     }
+
+    @Override
+    public String toString() {
+        return "Balance{" +
+                "balance=" + balance +
+                '}';
+    }
 }

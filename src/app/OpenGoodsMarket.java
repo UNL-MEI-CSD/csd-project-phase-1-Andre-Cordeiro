@@ -38,8 +38,6 @@ import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
 import pt.unl.fct.di.novasys.babel.exceptions.InvalidParameterException;
 import pt.unl.fct.di.novasys.babel.exceptions.ProtocolAlreadyExistsException;
-import pt.unl.fct.di.novasys.babel.generic.ProtoMessage;
-import pt.unl.fct.di.novasys.babel.generic.ProtoTimer;
 import pt.unl.fct.di.novasys.babel.generic.signed.InvalidFormatException;
 import pt.unl.fct.di.novasys.babel.generic.signed.NoSignaturePresentException;
 import pt.unl.fct.di.novasys.channel.simpleclientserver.SimpleServerChannel;
@@ -112,7 +110,7 @@ public class OpenGoodsMarket extends GenericProtocol {
             HandlerRegistrationException, GeneralSecurityException {
 
     	super(OpenGoodsMarket.PROTO_NAME, OpenGoodsMarket.PROTO_ID);
-    	    	
+    
     }
 
     private static String getAddress(String inter) throws SocketException {
@@ -149,11 +147,12 @@ public class OpenGoodsMarket extends GenericProtocol {
 				e.printStackTrace();
 			}
 		}
-		this.state = StateApp.getInstance();
 
+		this.state = StateApp.getInstance();
 		
     	clientChannel = createChannel(SimpleServerChannel.NAME, serverProps);
     	
+		//Serializers
     	registerMessageSerializer(clientChannel, IssueOffer.MESSAGE_ID, IssueOffer.serializer);
     	registerMessageSerializer(clientChannel, IssueWant.MESSAGE_ID, IssueWant.serializer);
     	registerMessageSerializer(clientChannel, Cancel.MESSAGE_ID, Cancel.serializer);
@@ -167,6 +166,7 @@ public class OpenGoodsMarket extends GenericProtocol {
     	registerMessageSerializer(clientChannel, GenericClientReply.MESSAGE_ID, GenericClientReply.serializer);
 		registerMessageSerializer(clientChannel, CheckBalanceReply.MESSAGE_ID, CheckBalanceReply.serializer);
     	
+		//Handlers
     	registerMessageHandler(clientChannel, IssueOffer.MESSAGE_ID, this::handleIssueOfferMessage);
     	registerMessageHandler(clientChannel, IssueWant.MESSAGE_ID, this::handleIssueWantMessage);
     	registerMessageHandler(clientChannel, Cancel.MESSAGE_ID, this::handleCancelMessage);
@@ -181,33 +181,39 @@ public class OpenGoodsMarket extends GenericProtocol {
 
 	}
 
-	//TODO: Implement
 	private void handleCheckBalanceMessage(CheckBalance cb, Host from, short sourceProto, int channelID) {
+
 		try {
-			if (!cb.checkSignature(cb.getcID())) {
+
+			if (!cb.checkSignature(cb.getCid())) {
+
 				logger.warn("Received CheckBalance with invalid signature");
 				state.changeOpers(cb.getRid(), OperationStatusReply.Status.REJECTED);
 				return;
+
 			}
+
 		} catch(InvalidKeyException | NoSuchAlgorithmException | SignatureException | InvalidFormatException
 				| NoSignaturePresentException e) {
 			e.printStackTrace();
 		}
 
-		CheckBalanceReply cbReply = new CheckBalanceReply(cb.getRid(), state.getBalance(cb.getcID()));
+		CheckBalanceReply cbReply = new CheckBalanceReply(cb.getRid(), state.getBalance(cb.getCid()));
 		sendMessage(clientChannel, cbReply, sourceProto, from, 0);
 	}
 
 	public void handleIssueOfferMessage(IssueOffer io, Host from, short sourceProto, int channelID ) {
-		// logger.info("Received IssueOffer (" + io.getRid() + " from " + from + "(" + io.getcID().toString() + ")");
+
 		// check if the signature is valid
 		try {
+
 			if (io.checkSignature(io.getcID())){
 				state.putOpers(io.getRid(), OperationStatusReply.Status.UNKOWN);
 			} else {
 				state.putOpers(io.getRid(), OperationStatusReply.Status.REJECTED);
 				return;
 			}
+
 		} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException | InvalidFormatException
 				| NoSignaturePresentException e) {
 			e.printStackTrace();
@@ -229,16 +235,17 @@ public class OpenGoodsMarket extends GenericProtocol {
 	}
 	
 	public void handleIssueWantMessage(IssueWant iw, Host from, short sourceProto, int channelID ) {
-		// logger.info("Received IssueWant (" + iw.getRid() + " from " + from + "(" + iw.getcID().toString() + ")");
 		
 		// Verify the signature of the message
 		try {
+
 			if (iw.checkSignature(iw.getcID())){
 				state.putOpers(iw.getRid(), OperationStatusReply.Status.UNKOWN);
 			} else {
 				state.putOpers(iw.getRid(), OperationStatusReply.Status.REJECTED);
 				return;
 			}
+
 		} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException | InvalidFormatException
 				| NoSignaturePresentException e) {
 			e.printStackTrace();
@@ -260,13 +267,14 @@ public class OpenGoodsMarket extends GenericProtocol {
 	}
 	
 	public void handleCancelMessage(Cancel c, Host from, short sourceProto, int channelID ) {
-		// logger.info("Received Cancel for operation " + c.getrID() + " from " + from);
 		
 		try {
+
 			if (!c.checkSignature(c.getcID())){
 				logger.warn ("Received a cancel with an invalid signature");
 				return;
 			}
+
 		} catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException | InvalidFormatException
 				| NoSignaturePresentException e) {
 			e.printStackTrace();
@@ -294,11 +302,10 @@ public class OpenGoodsMarket extends GenericProtocol {
 	}
 	
 	public void handleCheckOperationStatusMessage(CheckOperationStatus cos, Host from, short sourceProto, int channelID) {
-		// logger.info("Received CheckOperation for operation " + cos.getrID() + " from " + from);
 		
 		OperationStatusReply osr = null;
 		
-		Status s = state.getOpers().get(cos.getrID());
+		Status s = state.getOperationStatus(cos.getrID());
 		
 		if(s != null) {
 			switch (s) {
@@ -332,12 +339,11 @@ public class OpenGoodsMarket extends GenericProtocol {
 	}
 	
 	public void handleDepositMessage(Deposit d, Host from, short sourceProto, int channelID) {
-		// logger.info("Received deposit of " + d.getAmount() + " to " + d.getClientID().toString() + " from the Exchange (" + from + ")");
+
 		try {
 			if (d.checkSignature(exchangeIdentity)) {
 				state.putOpers(d.getRid(), OperationStatusReply.Status.UNKOWN);
 				this.state.putOpersBody(d.getRid(), d);
-				// logger.info("Received deposit of " + d.getAmount() + " to " + d.getClientID().toString() + " from the Exchange (" + from + ")");
 			} else {
 				// The deposit is not valid
 				state.putOpers(d.getRid(), OperationStatusReply.Status.REJECTED);
@@ -359,14 +365,14 @@ public class OpenGoodsMarket extends GenericProtocol {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+
 	}
 	
 	public void handleWithdrawalMessage(Withdrawal w, Host from, short sourceProto, int channelID) {
-		// logger.info("Received withdrawal of " + w.getAmount() + " to " + w.getClientID().toString() + " from the Exchange (" + from + ")");
+
 		try {
 			if (w.checkSignature(exchangeIdentity)) {
 				state.putOpers(w.getRid(), OperationStatusReply.Status.UNKOWN);
-				// logger.info("Received deposit of " + w.getAmount() + " to " + w.getClientID().toString() + " from the Exchange (" + from + ")");
 			} else {
 				//The widthdrawal is not valid
 				state.putOpers(w.getRid(), OperationStatusReply.Status.REJECTED);
@@ -376,6 +382,7 @@ public class OpenGoodsMarket extends GenericProtocol {
 				| NoSignaturePresentException e) {
 			e.printStackTrace();
 		}
+
 		this.state.putOpersBody(w.getRid(), w);
 		
 		GenericClientReply ack = new GenericClientReply(w.getRid());
@@ -389,6 +396,7 @@ public class OpenGoodsMarket extends GenericProtocol {
 		} catch (IOException e) {
 			e.printStackTrace();
 		};
+
 	}
 	
 	private void uponClientConnectionUp(ClientUpEvent event, int channel) {

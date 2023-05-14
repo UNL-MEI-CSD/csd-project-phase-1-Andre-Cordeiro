@@ -35,7 +35,11 @@ public class WithdrawalOp {
 
     @Override
     public String toString() {
-        return "Withdrawal{" + "rid=" + rid + ", clientID=" + clientID + ", amount=" + amount + '}';
+        return "Withdrawal{" + 
+        "rid=" + rid + 
+        ", clientID=" + clientID + 
+        ", amount=" + amount + 
+        '}';
     }
 
 }

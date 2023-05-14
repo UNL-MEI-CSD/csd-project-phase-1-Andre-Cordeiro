@@ -13,6 +13,7 @@ public class BlockChain {
     public BlockChain() {
         chain = new LinkedList<Block>();
         // Genesis block
+        // TODO: change this to a real genesis block
         try {
 			chain.add(new Block(new Host(InetAddress.getLocalHost(), 12357), 431, 0, new byte[0], new byte[0]));
 		} catch (UnknownHostException e) {

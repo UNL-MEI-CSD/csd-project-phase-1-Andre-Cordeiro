@@ -3,9 +3,7 @@ package app;
 public class WantOfferKeys {
 
     private String items;
-
     private int quantity;
-
     private Float price;
 
     public WantOfferKeys(String items, int quantity, float price) {
@@ -32,6 +30,15 @@ public class WantOfferKeys {
 
     public void setPrice(float price) {
         this.price = price;
+    }
+
+    @Override
+    public String toString(){
+        return "WantOfferKeys{" +
+                "items=" + items +
+                ", quantity=" + quantity +
+                ", price=" + price +
+                '}';
     }
 
     

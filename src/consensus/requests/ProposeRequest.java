@@ -14,10 +14,12 @@ public class ProposeRequest extends ProtoRequest {
 	private final Timestamp timestamp;
 	
 	public ProposeRequest(byte[] block, byte[] signature) {
+
 		super(ProposeRequest.REQUEST_ID);
 		this.block = block;
 		this.signature = signature;
 		this.timestamp = new Timestamp(new Date().getTime());
+
 	}
 
 	public byte[] getBlock() {
@@ -36,7 +38,13 @@ public class ProposeRequest extends ProtoRequest {
 		return block.hashCode();
 	}
 	
-	
-	
+	@Override
+	public String toString() {
+		return "ProposeRequest{" +
+				"block=" + block +
+				", signature=" + signature +
+				", timestamp=" + timestamp +
+				'}';
+	}
 
 }

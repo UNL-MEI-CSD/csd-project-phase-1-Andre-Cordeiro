@@ -59,10 +59,12 @@ public class CancelOp {
         }
     }
 
-
-
     @Override
     public String toString() {
-        return "Cancel{" + "rID=" + rID + ", cID=" + cID + ", resourceType=" + resourceType + '}';
+        return "Cancel{" + 
+            "rID=" + rID + 
+            ", cID=" + cID + 
+            ", resourceType=" + resourceType + 
+            '}';
     }
 }

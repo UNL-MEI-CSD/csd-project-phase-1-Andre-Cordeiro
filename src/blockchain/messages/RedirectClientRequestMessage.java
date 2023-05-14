@@ -13,7 +13,6 @@ public class RedirectClientRequestMessage extends SignedProtoMessage{
 	public final static short MESSAGE_ID = 207;
 
 	private final ClientRequest clientRequest;
-
 	private final String cryptoName;
 	
 	public RedirectClientRequestMessage(ClientRequest clientRequest, String cryptoName) {
@@ -50,9 +49,6 @@ public class RedirectClientRequestMessage extends SignedProtoMessage{
 	public SignedMessageSerializer<? extends SignedProtoMessage> getSerializer() {
 		return RedirectClientRequestMessage.serializer;
 	}
-
-
-	
 
 	public ClientRequest getClientRequest() {
 		return clientRequest;

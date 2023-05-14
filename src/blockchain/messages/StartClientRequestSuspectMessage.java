@@ -13,7 +13,6 @@ public class StartClientRequestSuspectMessage extends SignedProtoMessage {
 	public final static short MESSAGE_ID = 203;
 
 	private final UUID pendingRequestID;
-
 	private final String cryptoName;
 
 	public StartClientRequestSuspectMessage(UUID pendingRequestID, String cryptoName) {
