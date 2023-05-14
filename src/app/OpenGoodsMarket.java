@@ -194,18 +194,8 @@ public class OpenGoodsMarket extends GenericProtocol {
 			e.printStackTrace();
 		}
 
-		GenericClientReply ack = new GenericClientReply(cb.getRid());
-		sendMessage(clientChannel, ack, sourceProto, from, 0);
-
-		ByteBuf buf = Unpooled.buffer();
-		try {
-			cb.getSerializer().serializeBody(cb, buf);
-			ClientRequest cr = new ClientRequest(cb.getRid(), buf.array());
-			sendRequest(cr, BlockChainProtocol.PROTO_ID);
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-
+		CheckBalanceReply cbReply = new CheckBalanceReply(cb.getRid(), state.getBalance(cb.getcID()));
+		sendMessage(clientChannel, cbReply, sourceProto, from, 0);
 	}
 
 	public void handleIssueOfferMessage(IssueOffer io, Host from, short sourceProto, int channelID ) {

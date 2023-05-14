@@ -319,4 +319,11 @@ public class StateApp {
 			"Unkown: " + unkown + "\n";
 	}
 
+	public float getBalance(PublicKey publicKey) {
+		if (clientAccountBalance.containsKey(publicKey)){
+			return clientAccountBalance.get(publicKey);
+		} else {
+			return 0;
+		}
+	}
 }
