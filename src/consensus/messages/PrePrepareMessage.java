@@ -13,13 +13,13 @@ public class PrePrepareMessage extends SignedProtoMessage {
 	public final static short MESSAGE_ID = 101;
 
 	public final MessageBatchKey batchKey;
-	public final byte[] operation;
-	public final String cryptoName; //cryptoName
+	public final byte[] block;
+	public final String cryptoName; 
 	
 	public PrePrepareMessage(MessageBatchKey batchKey, byte[] block, String cryptoName) {  
 		super(PrePrepareMessage.MESSAGE_ID);
 		this.batchKey = batchKey;
-		this.operation = block;
+		this.block = block;
 		this.cryptoName = cryptoName;
 	}
 
@@ -27,11 +27,11 @@ public class PrePrepareMessage extends SignedProtoMessage {
 
 		@Override
 		public void serializeBody(PrePrepareMessage signedProtoMessage, ByteBuf out) throws IOException {
-			out.writeInt(signedProtoMessage.batchKey.getOpsHash());
+			out.writeInt(signedProtoMessage.batchKey.getOpsMapHash());
 			out.writeInt(signedProtoMessage.batchKey.getSeqN());
 			out.writeInt(signedProtoMessage.batchKey.getViewNumber());
-			out.writeInt(signedProtoMessage.operation.length);
-			out.writeBytes(signedProtoMessage.operation);
+			out.writeInt(signedProtoMessage.block.length);
+			out.writeBytes(signedProtoMessage.block);
 			out.writeCharSequence(signedProtoMessage.cryptoName, StandardCharsets.UTF_8);
 		}
 
@@ -68,8 +68,8 @@ public class PrePrepareMessage extends SignedProtoMessage {
 		return cryptoName;
 	}
 
-	public byte[] getOperation() {
-		return operation;
+	public byte[] getBlock() {
+		return block;
 	}
 
 }

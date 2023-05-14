@@ -2,18 +2,18 @@ package utils.MessageBatch;
 
 public class MessageBatchKey {
     
-    private final int opsHash;
+    private final int opsMapHash;
     private int seqN;
     private int viewNumber;
 
     public MessageBatchKey(int opsHash, int seqN, int viewNumber) {
-        this.opsHash = opsHash;
+        this.opsMapHash = opsHash;
         this.seqN = seqN;
         this.viewNumber = viewNumber;
     }
 
-    public int getOpsHash() {
-        return opsHash;
+    public int getOpsMapHash() {
+        return opsMapHash;
     }
 
     public int getSeqN() {
@@ -27,7 +27,7 @@ public class MessageBatchKey {
     public int hashCode() {
         //create a unique hashcode for each batch
         int hash = 1;
-        hash = hash * 17 + opsHash;
+        hash = hash * 17 + opsMapHash;
         hash = hash * 31 + seqN;
         hash = hash * 13 + viewNumber;
         return hash;
@@ -36,7 +36,7 @@ public class MessageBatchKey {
     @Override
     public String toString() {
         return "MessageBatchKey{" +
-                "opsHash=" + opsHash +
+                "opsHash=" + opsMapHash +
                 ", seqN=" + seqN +
                 ", viewNumber=" + viewNumber +
                 '}';

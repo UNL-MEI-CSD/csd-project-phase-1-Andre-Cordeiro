@@ -25,7 +25,7 @@ public class PrepareMessage extends SignedProtoMessage {
 
 		@Override
 		public void serializeBody(PrepareMessage signedProtoMessage, ByteBuf out) throws IOException {
-			out.writeInt(signedProtoMessage.batchKey.getOpsHash());
+			out.writeInt(signedProtoMessage.batchKey.getOpsMapHash());
 			out.writeInt(signedProtoMessage.batchKey.getSeqN());
 			out.writeInt(signedProtoMessage.batchKey.getViewNumber());
 			out.writeCharSequence(signedProtoMessage.cryptoName, StandardCharsets.UTF_8);

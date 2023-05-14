@@ -391,7 +391,7 @@ public class PBFTProtocol extends GenericProtocol {
 
 		if(checkValidMessage(msg,from)){
 			try {
-				opsMap.addOp(msg.getBatchKey().hashCode(), msg.getOperation());
+				opsMap.addOp(msg.getBatchKey().hashCode(), msg.getBlock());
 				logger.info("Pre-prepare message added to the opsMap " + msg.getBatchKey().hashCode());
 				mb.addMessage(msg.getBatchKey().hashCode());
 			}

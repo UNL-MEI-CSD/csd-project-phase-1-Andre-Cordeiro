@@ -5,23 +5,23 @@ import java.sql.Timestamp;
 public class OpsMapKey {
     
     private final Timestamp timestamp;
-    private final int opHash;
+    private final int blockHash;
 
     public OpsMapKey(Timestamp timestamp, int opHash) {
         this.timestamp = timestamp;
-        this.opHash = opHash;
+        this.blockHash = opHash;
     }
 
     public Timestamp getTimestamp() {
         return timestamp;
     }
 
-    public int getOpHash() {
-        return opHash;
+    public int getBlockHash() {
+        return blockHash;
     }
 
     @Override
     public int hashCode() {
-        return timestamp.hashCode() + opHash;
+        return timestamp.hashCode() + blockHash;
     }
 }
